@@ -113,6 +113,12 @@ export const DeadlineRuleSchema = z.object({
   id: z.string(),
   title: z.string(),
   hours: z.number().positive(),
+  /**
+   * Как течёт срок. Аварийные считаются календарно, круглосуточно.
+   * Ремонтные — только в рабочие дни: заявка, поданная в пятницу вечером,
+   * не должна просрочиться в субботу.
+   */
+  clock: z.enum(['calendar', 'working']).default('calendar'),
   dataKind: DataKindSchema,
   source: SourceSchema.optional(),
   note: z.string().optional(),
@@ -124,6 +130,16 @@ export const DeadlineRulesFileSchema = z.object({
   dataKind: DataKindSchema,
   items: z.array(DeadlineRuleSchema).min(1),
 });
+
+/** Производственный календарь: даты в формате YYYY-MM-DD по местному времени. */
+export const WorkCalendarSchema = z.object({
+  year: z.int(),
+  dataKind: DataKindSchema,
+  note: z.string().optional(),
+  holidays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
+  workingWeekends: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
+});
+export type WorkCalendar = z.infer<typeof WorkCalendarSchema>;
 
 export const RegionMetaSchema = z.object({
   code: z.string(),

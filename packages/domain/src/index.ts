@@ -1,4 +1,5 @@
 export * from './contracts';
+export * from './deadlines';
 export * from './regions';
 export * from './schedule';
 
