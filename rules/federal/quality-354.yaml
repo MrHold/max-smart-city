@@ -1,0 +1,57 @@
+# Нормативы качества коммунальных услуг и размер снижения платы.
+# Федеральная часть: одинакова для всей страны, от региона не зависит.
+#
+# ВНИМАНИЕ: значения выписаны из приложения 1 к Правилам предоставления коммунальных
+# услуг и требуют сверки с действующей редакцией перед защитой. Пункты помечены в source.
+version: '2026.09.1'
+source:
+  act: ПП РФ № 354
+  point: приложение 1
+dataKind: official
+
+items:
+  - id: heating.indoor_temperature
+    service: heating
+    title: Температура воздуха в жилом помещении
+    places: [room, corner_room]
+    source:
+      act: ПП РФ № 354
+      point: приложение 1, раздел VI
+    norm:
+      celsius: 18
+      cornerRoomCelsius: 20
+    tolerance:
+      # Ночью допустимо снижение, днём — нет. Время местное для дома.
+      night:
+        from: '00:00'
+        to: '05:00'
+        maxDeviationCelsius: 3
+      day:
+        maxDeviationCelsius: 0
+    reduction:
+      kind: per_hour_per_degree
+      percent: 0.15
+
+  - id: hot_water.temperature
+    service: hot_water
+    title: Температура горячей воды в точке разбора
+    places: [tap]
+    source:
+      act: ПП РФ № 354
+      point: приложение 1, раздел II
+    norm:
+      celsius: 60
+      # Ниже этого порога услуга оплачивается по тарифу холодной воды.
+      coldWaterFallbackBelowCelsius: 40
+    tolerance:
+      night:
+        from: '00:00'
+        to: '05:00'
+        maxDeviationCelsius: 5
+      day:
+        maxDeviationCelsius: 3
+    reduction:
+      # Снижение считается шагами по 3 °C за каждый час отклонения.
+      kind: per_hour_per_step
+      stepCelsius: 3
+      percent: 0.1

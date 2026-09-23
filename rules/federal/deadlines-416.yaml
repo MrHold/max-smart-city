@@ -1,0 +1,50 @@
+# Сроки, по которым считается dueAt у заявки. Категория ссылается на id отсюда,
+# поэтому срок в карточке всегда имеет основание, а не взят на глаз.
+#
+# clock: calendar — срок течёт круглосуточно (аварии);
+# clock: working  — срок стоит в выходные и праздники (плановый ремонт).
+#
+# ВНИМАНИЕ: нормативные сроки требуют сверки с действующей редакцией ПП РФ № 416.
+# Сроки с dataKind 'model' — наше допущение на время MVP, нормой не установлены.
+version: '2026.09.1'
+dataKind: official
+
+items:
+  - id: ads.localization
+    title: Локализация аварии на внутридомовых системах
+    hours: 0.5
+    clock: calendar
+    dataKind: official
+    source:
+      act: ПП РФ № 416
+      point: п. 13
+
+  - id: ads.emergency
+    title: Устранение аварийного повреждения
+    hours: 2
+    clock: calendar
+    dataKind: official
+    source:
+      act: ПП РФ № 416
+      point: п. 13
+
+  - id: repair.day
+    title: Текущий ремонт, срочные работы
+    hours: 24
+    clock: working
+    dataKind: model
+    note: Срок установлен договором управления, единой федеральной нормы нет
+
+  - id: repair.three_days
+    title: Текущий ремонт, обычные работы
+    hours: 72
+    clock: working
+    dataKind: model
+    note: Срок установлен договором управления
+
+  - id: repair.week
+    title: Работы по благоустройству
+    hours: 168
+    clock: working
+    dataKind: model
+    note: Срок установлен договором управления

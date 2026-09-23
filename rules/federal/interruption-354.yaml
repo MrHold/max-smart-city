@@ -1,0 +1,69 @@
+# Допустимая продолжительность перерывов подачи и снижение платы за её превышение.
+#
+# Ключевое правило продукта: плата снижается только за часы СВЕРХ допустимого,
+# а не с первой минуты. До порога интерфейс показывает обратный отсчёт.
+#
+# ВНИМАНИЕ: сверить с действующей редакцией приложения 1 к ПП РФ № 354 перед защитой.
+version: '2026.09.1'
+source:
+  act: ПП РФ № 354
+  point: приложение 1
+dataKind: official
+
+items:
+  - id: cold_water.interruption
+    service: cold_water
+    title: Перерыв подачи холодной воды
+    source:
+      act: ПП РФ № 354
+      point: приложение 1, раздел I
+    limits:
+      monthlyHours: 8
+      singleHours: 4
+      # При аварии на тупиковой магистрали допустимый единовременный перерыв больше.
+      accidentSingleHours: 24
+    reduction:
+      kind: per_hour
+      percent: 0.15
+
+  - id: hot_water.interruption
+    service: hot_water
+    title: Перерыв подачи горячей воды
+    source:
+      act: ПП РФ № 354
+      point: приложение 1, раздел II
+    limits:
+      monthlyHours: 8
+      singleHours: 4
+      accidentSingleHours: 24
+    planned:
+      # Плановое летнее отключение на ремонт и промывку. В пределах срока
+      # это не нарушение — самый частый случай «нет горячей воды».
+      allowedDays: 14
+      note: Срок планового отключения задаётся санитарными правилами, требует сверки
+    reduction:
+      kind: per_hour
+      percent: 0.15
+
+  - id: heating.interruption
+    service: heating
+    title: Перерыв подачи отопления
+    source:
+      act: ПП РФ № 354
+      point: приложение 1, раздел VI
+    limits:
+      monthlyHours: 24
+      # Допустимый единовременный перерыв зависит от температуры в квартире,
+      # поэтому для перерыва отопления замер обязателен.
+      singleHoursByIndoorTemperature:
+        - fromCelsius: 12
+          hours: 16
+        - fromCelsius: 10
+          toCelsius: 12
+          hours: 8
+        - fromCelsius: 8
+          toCelsius: 10
+          hours: 4
+    reduction:
+      kind: per_hour
+      percent: 0.15
