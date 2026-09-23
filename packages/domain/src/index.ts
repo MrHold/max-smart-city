@@ -1,5 +1,6 @@
 export * from './contracts';
 export * from './deadlines';
+export * from './quality';
 export * from './regions';
 export * from './schedule';
 
