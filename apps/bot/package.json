@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt tsx watch --env-file=../../.env src/index.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@maxhub/max-bot-api": "0.3.1",
     "@msc/domain": "workspace:*",
     "tsx": "4.23.15"
   }
