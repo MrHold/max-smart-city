@@ -1,0 +1,23 @@
+# зависимости
+node_modules/
+
+# сборка
+dist/
+*.tsbuildinfo
+
+# секреты — в git только .env.example
+.env
+.env.*
+!.env.example
+
+# данные локального запуска
+/photos/
+/pgdata/
+
+# логи и мусор ОС и редакторов
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
