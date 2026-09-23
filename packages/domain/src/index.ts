@@ -1,3 +1,5 @@
+export * from './contracts';
+
 export interface Clock {
   now(): Date;
 }
