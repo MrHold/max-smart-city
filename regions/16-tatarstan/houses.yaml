@@ -1,0 +1,27 @@
+# Дома региона. fiasId — идентификатор дома в государственном адресном реестре,
+# в MVP модельный; при подключении региона заменяется настоящим без правки кода.
+region: '16'
+items:
+  - id: house-16-kazan-001
+    address: Казань, ул. Садовая, 12
+    fiasId: '00000000-0000-0000-0000-000000160001'
+    orgId: org-16-uyut
+    entrances: 4
+    floors: 9
+    dataKind: model
+
+  - id: house-16-kazan-002
+    address: Казань, ул. Центральная, 5
+    fiasId: '00000000-0000-0000-0000-000000160002'
+    orgId: org-16-uyut
+    entrances: 2
+    floors: 5
+    dataKind: model
+
+  - id: house-16-kazan-003
+    address: Казань, пр. Победы, 40
+    fiasId: '00000000-0000-0000-0000-000000160003'
+    orgId: org-16-uyut
+    entrances: 6
+    floors: 12
+    dataKind: model

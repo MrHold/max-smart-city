@@ -1,4 +1,5 @@
 export * from './contracts';
+export * from './regions';
 export * from './schedule';
 
 export interface Clock {
