@@ -12,6 +12,7 @@ const rawRules = {
   quality: read('rules/federal/quality-354.yaml'),
   interruption: read('rules/federal/interruption-354.yaml'),
   deadlines: read('rules/federal/deadlines-416.yaml'),
+  calendar: read('rules/federal/calendar-2026.yaml'),
 };
 
 const readRegion = (code: string) => ({

@@ -32,6 +32,7 @@ export async function loadRegionsData(
     quality: await readYaml(join(rulesDir, 'quality-354.yaml')),
     interruption: await readYaml(join(rulesDir, 'interruption-354.yaml')),
     deadlines: await readYaml(join(rulesDir, 'deadlines-416.yaml')),
+    calendar: await readYaml(join(rulesDir, `calendar-${new Date().getUTCFullYear()}.yaml`)),
   });
 
   const regionsDir = join(root, 'regions');
