@@ -176,6 +176,21 @@ rules/federal/  федеральные нормы: ПП 354, ПП 416           
 | `pnpm --filter @msc/miniapp dev` | мини-приложение в браузере, `http://localhost:5173` |
 | `pnpm --filter @msc/miniapp build` | собрать статику в `apps/miniapp/dist` |
 
+### Тесты API на настоящей базе
+
+Заявка живёт в нескольких таблицах и транзакциях, поэтому маршруты проверяются не на моках,
+а на живой базе. Тесты берут её из `TEST_DATABASE_URL`; если переменная не задана, они
+пропускаются, и `pnpm test` проходит без поднятого Postgres.
+
+```bash
+docker compose up -d db
+docker compose exec db psql -U msc -d postgres -c 'create database msc_test'
+TEST_DATABASE_URL=postgres://msc:msc_local_only@localhost:5432/msc_test pnpm --filter @msc/api test
+```
+
+Тестовая база очищается перед каждым тестом, миграции применяются автоматически.
+Рабочую базу тесты не трогают.
+
 ### Мини-приложение без MAX
 
 В браузере нет `window.WebApp`, поэтому в режиме разработки подставляется мок MAX Bridge с тестовым
