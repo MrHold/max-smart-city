@@ -1,11 +1,12 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, preHandlerAsyncHookHandler } from 'fastify';
 import { badRequest, notFound } from '../errors';
 import { allowedImageTypes, maxPhotoBytes, type Storage } from '../storage';
 
 export const photosRoutes =
-  (storage: Storage): FastifyPluginAsync =>
+  (storage: Storage, authenticate?: preHandlerAsyncHookHandler): FastifyPluginAsync =>
   async (app) => {
-    app.post('/api/photos', async (req) => {
+    // Загружать фото может только вошедший через MAX; отдача по ключу открыта — ключ неугадываемый
+    app.post('/api/photos', { preHandler: authenticate ? [authenticate] : [] }, async (req) => {
       const file = await req.file({ limits: { fileSize: maxPhotoBytes, files: 1 } });
       if (!file) throw badRequest('Нужен файл в поле file');
       if (!allowedImageTypes[file.mimetype])
