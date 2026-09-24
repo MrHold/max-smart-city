@@ -1,4 +1,6 @@
 import { Bot, Keyboard } from '@maxhub/max-bot-api';
+import { createDb, parseEncKey } from '@msc/db';
+import { startOutbox } from './outbox';
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -39,6 +41,23 @@ bot.on('message_created', (ctx) =>
 bot.catch((err) => {
   console.error('Ошибка в обработчике:', err);
 });
+
+// Почтальон: рассылает уведомления, которые API кладёт в outbox
+const databaseUrl = process.env.DATABASE_URL;
+const encKeyBase64 = process.env.USER_ID_ENC_KEY;
+if (databaseUrl && encKeyBase64) {
+  const { db } = createDb(databaseUrl);
+  startOutbox({
+    bot,
+    db,
+    encKey: parseEncKey(encKeyBase64),
+    botUsername: me.username,
+    botId: me.user_id,
+  });
+  console.log('Уведомления из outbox включены');
+} else {
+  console.warn('Уведомления выключены: не заданы DATABASE_URL или USER_ID_ENC_KEY');
+}
 
 const mode = process.env.BOT_MODE ?? 'polling';
 
