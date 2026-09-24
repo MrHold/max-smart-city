@@ -1,5 +1,6 @@
 import * as z from 'zod';
 import {
+  ApartmentLabelSchema,
   IsoDateTime,
   LocationScopeSchema,
   MeasurementPlaceSchema,
@@ -75,7 +76,7 @@ export const JoinerSchema = JoinerPublicSchema.extend({
 export type Joiner = z.infer<typeof JoinerSchema>;
 
 export const JoinInputSchema = z.object({
-  apartmentLabel: z.string().min(1).max(20),
+  apartmentLabel: ApartmentLabelSchema,
   measurements: z.array(MeasurementSchema),
 });
 export type JoinInput = z.infer<typeof JoinInputSchema>;
