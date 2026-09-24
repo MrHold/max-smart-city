@@ -12,7 +12,9 @@ export const bindRoutes =
     app.post('/api/me/house', { preHandler: authenticate }, async (req) => {
       const auth = getAuth(req);
       const parsed = BindHouseInputSchema.safeParse(req.body);
-      if (!parsed.success) throw badRequest('Укажите дом и квартиру');
+      if (!parsed.success) {
+        throw badRequest(parsed.error.issues[0]?.message ?? 'Укажите дом и квартиру');
+      }
       const { houseId, apartmentLabel } = parsed.data;
 
       const [house] = await db

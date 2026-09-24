@@ -25,6 +25,9 @@ export function JoinRequest() {
 
   const submit = async () => {
     if (!label) return setError('Укажите номер квартиры');
+    if (apartment && (!/^\d{1,4}$/.test(apartment) || Number(apartment) < 1)) {
+      return setError('Номер квартиры — от 1 до 9999');
+    }
     if (needsTemp && temp !== '' && Number.isNaN(Number(temp)))
       return setError('Температура — число');
     try {
@@ -84,9 +87,10 @@ export function JoinRequest() {
           id="apt"
           className="input"
           inputMode="numeric"
+          maxLength={4}
           placeholder={me.data?.apartmentLabel ?? '48'}
           value={apartment}
-          onChange={(e) => setApartment(e.target.value)}
+          onChange={(e) => setApartment(e.target.value.replace(/\D/g, ''))}
         />
       </Field>
       {needsTemp && (

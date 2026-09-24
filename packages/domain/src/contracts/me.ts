@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { RoleSchema } from './common';
+import { ApartmentLabelSchema, RoleSchema } from './common';
 
 /** Ответ GET /api/me: кто открыл мини-приложение. Первый вызов создаёт пользователя. */
 export const MeSchema = z.object({
@@ -37,6 +37,6 @@ export type Me = z.infer<typeof MeSchema>;
 
 export const BindHouseInputSchema = z.object({
   houseId: z.string(),
-  apartmentLabel: z.string().min(1).max(20),
+  apartmentLabel: ApartmentLabelSchema,
 });
 export type BindHouseInput = z.infer<typeof BindHouseInputSchema>;

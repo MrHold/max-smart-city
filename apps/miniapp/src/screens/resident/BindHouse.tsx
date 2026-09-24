@@ -16,7 +16,9 @@ export function BindHouse() {
 
   const submit = async () => {
     if (!house) return setError('Выберите дом');
-    if (!apartment) return setError('Укажите квартиру');
+    if (!/^\d{1,4}$/.test(apartment) || Number(apartment) < 1) {
+      return setError('Номер квартиры — от 1 до 9999');
+    }
     try {
       await bind.mutateAsync({ houseId: house.id, apartmentLabel: `кв. ${apartment}` });
       navigate('/', { replace: true });
@@ -89,8 +91,9 @@ export function BindHouse() {
               id="apt"
               className="input"
               inputMode="numeric"
+              maxLength={4}
               value={apartment}
-              onChange={(e) => setApartment(e.target.value)}
+              onChange={(e) => setApartment(e.target.value.replace(/\D/g, ''))}
             />
           </Field>
         </>
