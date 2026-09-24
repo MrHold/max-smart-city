@@ -45,12 +45,20 @@ const rank: Record<RequestStatus, number> = {
   confirmed: 4,
 };
 
+// Типы событий на сервере отличаются от статусов: заявка «done», а событие — «completed»
+const eventTypes: Partial<Record<RequestStatus, string[]>> = {
+  new: ['created', 'new'],
+  accepted: ['accepted'],
+  assigned: ['assigned'],
+  done: ['completed', 'done'],
+  confirmed: ['confirmed'],
+};
+
 export function buildTimeline(status: RequestStatus, events: RequestEvent[]): TimelineStep[] {
   const current = rank[status];
   return order.map((o, i) => {
-    const ev = events.find(
-      (e) => e.type === o.status || (o.status === 'new' && e.type === 'created'),
-    );
+    const types = eventTypes[o.status] ?? [o.status];
+    const ev = events.find((e) => types.includes(e.type));
     const state: TimelineStep['state'] = i < current ? 'done' : i === current ? 'current' : 'todo';
     return {
       label: state === 'todo' ? o.todo : o.label,
