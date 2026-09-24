@@ -1,6 +1,17 @@
+# Весь проект одной командой: docker compose up -d --build
+# Наружу открыт только web (Caddy): 80 и 443. Остальные сервисы — внутри сети Docker.
+
+# Общие настройки для api, bot и migrate: один образ из корневого Dockerfile
+x-app: &app
+  build: .
+  restart: unless-stopped
+  init: true
+  env_file: .env
+
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -15,5 +26,64 @@ services:
       timeout: 3s
       retries: 10
 
+  # Применяет миграции и завершается; api и bot стартуют только после её успеха
+  migrate:
+    <<: *app
+    restart: "no"
+    working_dir: /repo/apps/api
+    command: ["node", "--import", "tsx", "../../packages/db/src/migrate.ts"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      API_PORT: "3001"
+      PHOTOS_DIR: /data/photos
+    volumes:
+      - photos:/data/photos
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  bot:
+    <<: *app
+    working_dir: /repo/apps/bot
+    command: ["node", "--import", "tsx", "src/index.ts"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      BOT_PORT: "3002"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Caddy + статика мини-приложения (Dockerfile и Caddyfile — в apps/miniapp)
+  web:
+    build:
+      context: .
+      dockerfile: apps/miniapp/Dockerfile
+      args:
+        VITE_BOT_NAME: ${VITE_BOT_NAME:-}
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-1}
+    restart: unless-stopped
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - bot
+
 volumes:
   pgdata:
+  photos:
+  caddy_data:
+  caddy_config:

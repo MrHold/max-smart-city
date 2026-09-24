@@ -33,5 +33,23 @@ bot.catch((err) => {
 });
 
 const me = await bot.api.getMyInfo();
-console.log(`Бот @${me.username} запущен (long polling)`);
-await bot.start();
+const mode = process.env.BOT_MODE ?? 'polling';
+
+if (mode === 'webhook') {
+  // На сервере: MAX сам присылает апдейты на https://<домен>/webhook, Caddy передаёт их сюда
+  const domain = process.env.PUBLIC_DOMAIN;
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!domain || !secret) {
+    console.error('Для BOT_MODE=webhook нужны PUBLIC_DOMAIN и WEBHOOK_SECRET');
+    process.exit(1);
+  }
+  const port = Number(process.env.BOT_PORT ?? 3002);
+  await bot.start({ mode: 'webhook', options: { domain, port, path: '/webhook', secret } });
+  console.log(`Бот @${me.username} запущен (webhook https://${domain}/webhook, порт ${port})`);
+} else {
+  // Локально: бот сам спрашивает у MAX новые апдейты.
+  // Внимание: при старте polling снимает подписку webhook — не запускать с настоящим токеном,
+  // когда бот работает на сервере.
+  console.log(`Бот @${me.username} запущен (long polling)`);
+  await bot.start();
+}

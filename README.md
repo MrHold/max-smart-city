@@ -220,20 +220,38 @@ pnpm --filter @msc/miniapp dev
 
 ## Запуск в Docker
 
-### Сейчас
-
-В Docker запускается только база данных:
+Весь проект одной командой:
 
 ```bash
-docker compose up -d db       # запустить в фоне
-docker compose ps             # статус; должно быть (healthy)
-docker compose logs -f db     # логи
-docker compose down           # остановить (данные сохраняются в томе pgdata)
-docker compose down -v        # остановить и удалить данные БД
-docker compose exec db psql -U msc -d msc   # консоль базы
+cp .env.example .env          # если ещё нет; заполнить BOT_TOKEN, USER_HASH_SECRET, USER_ID_ENC_KEY
+docker compose up -d --build
+docker compose ps -a          # migrate — Exited (0), остальные — Up
 ```
 
-Бот, API и мини-приложение пока запускаются локально через pnpm (см. «Команды»).
+| Сервис | Что делает | Порт |
+|---|---|---|
+| `db` | PostgreSQL 16, данные в томе `pgdata` | `127.0.0.1:5432` |
+| `migrate` | применяет миграции и завершается | — |
+| `api` | HTTP API; при старте загружает дома и УК из `regions/` | 3001, внутри сети |
+| `bot` | чат-бот: `BOT_MODE=polling` локально, `webhook` на сервере | 3002, внутри сети |
+| `web` | Caddy: мини-приложение, `/api` → api, `/webhook` → bot; HTTPS, если задан `PUBLIC_DOMAIN` | 80, 443 |
+
+`api`, `bot` и `migrate` собираются из корневого `Dockerfile`, `web` — из `apps/miniapp/Dockerfile`.
+Порядок запуска: `db` (healthy) → `migrate` (успешно завершилась) → `api`, `bot` → `web`.
+
+```bash
+docker compose logs -f api    # логи сервиса (Ctrl+C — выйти)
+docker compose stop           # остановить, данные сохраняются
+docker compose start          # запустить снова
+docker compose down           # удалить контейнеры, тома с данными остаются
+docker compose down -v        # удалить всё, включая БД, фото и сертификаты Caddy — осторожно
+```
+
+**На сервере** в `.env` дополнительно: `PUBLIC_DOMAIN=<домен>`, `BOT_MODE=webhook`, `WEBHOOK_SECRET`,
+собственный `POSTGRES_PASSWORD`.
+
+**Бот с настоящим токеном — только один экземпляр.** Режим polling при старте снимает подписку webhook:
+локальный запуск отключит бота на сервере.
 
 ### Мини-приложение как образ
 
