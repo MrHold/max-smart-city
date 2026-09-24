@@ -5,7 +5,9 @@ import { loadRegionsData, regionsDataSource } from './data/regions';
 import { seedFromRegions } from './data/seed';
 
 const port = Number(process.env.API_PORT ?? 3001);
-const corsOrigin = process.env.CORS_ORIGIN ?? true;
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+  : true;
 
 const databaseUrl = process.env.DATABASE_URL;
 const db = databaseUrl ? createDb(databaseUrl).db : undefined;
