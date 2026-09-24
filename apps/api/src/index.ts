@@ -20,6 +20,7 @@ const app = buildApp({
   logger: true,
   corsOrigin,
   data,
+  regions,
   db,
   auth: auth.ok ? auth.config : undefined,
 });

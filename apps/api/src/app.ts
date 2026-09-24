@@ -5,17 +5,21 @@ import { type Clock, systemClock } from '@msc/domain';
 import Fastify from 'fastify';
 import { makeAuthenticate } from './auth/authenticate';
 import type { AuthConfig } from './auth/config';
+import type { RegionsData } from './data/regions';
 import type { DataSource } from './data/source';
 import { ApiError } from './errors';
 import { bindRoutes } from './routes/bind';
 import { housesRoutes } from './routes/houses';
 import { meRoutes } from './routes/me';
 import { photosRoutes } from './routes/photos';
+import { requestsRoutes } from './routes/requests';
 import type { Storage } from './storage';
 import { diskStorage } from './storage/disk';
 
 export interface AppOptions {
   data: DataSource;
+  /** Правила и пакеты регионов: нужны заявкам для сроков, вердикта и расчёта. */
+  regions?: RegionsData;
   storage?: Storage;
   clock?: Clock;
   corsOrigin?: string | string[] | boolean;
@@ -75,6 +79,9 @@ export function buildApp(opts: AppOptions) {
   if (opts.db && authenticate) {
     app.register(meRoutes(opts.db, authenticate));
     app.register(bindRoutes(opts.db, authenticate));
+    if (opts.regions) {
+      app.register(requestsRoutes(opts.db, opts.regions, clock, authenticate));
+    }
   }
 
   return app;

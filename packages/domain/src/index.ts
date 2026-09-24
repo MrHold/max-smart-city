@@ -4,6 +4,7 @@ export * from './liability';
 export * from './quality';
 export * from './regions';
 export * from './schedule';
+export * from './workflow';
 
 export interface Clock {
   now(): Date;

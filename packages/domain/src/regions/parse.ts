@@ -10,6 +10,7 @@ import type {
   RegionMeta,
   RegionOrg,
   Tariff,
+  WorkCalendar,
 } from './schema';
 import {
   DeadlineRulesFileSchema,
@@ -21,6 +22,7 @@ import {
   RegionNormativesFileSchema,
   RegionOrgsFileSchema,
   RegionTariffsFileSchema,
+  WorkCalendarSchema,
 } from './schema';
 
 export interface FederalRules {
@@ -28,6 +30,8 @@ export interface FederalRules {
   quality: QualityRule[];
   interruption: InterruptionRule[];
   deadlines: DeadlineRule[];
+  /** Производственный календарь: по нему сроки не текут в выходные и праздники. */
+  calendar: WorkCalendar;
 }
 
 export interface RegionPackage {
@@ -44,6 +48,7 @@ export interface RawFederalRules {
   quality: unknown;
   interruption: unknown;
   deadlines: unknown;
+  calendar: unknown;
 }
 
 export interface RawRegionPackage {
@@ -86,11 +91,18 @@ export function parseFederalRules(raw: RawFederalRules): FederalRules {
     );
   }
 
+  const calendar = parseFile(
+    WorkCalendarSchema,
+    raw.calendar,
+    `rules/federal/calendar-${new Date().getUTCFullYear()}.yaml`,
+  );
+
   return {
     version: quality.version,
     quality: quality.items,
     interruption: interruption.items,
     deadlines: deadlines.items,
+    calendar,
   };
 }
 

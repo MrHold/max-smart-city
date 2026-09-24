@@ -38,11 +38,16 @@ export interface LiabilityInput {
 const round = (n: number): number => Math.round(n);
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-const refOf = (source: { act?: string; point?: string; url?: string }): NormRef => ({
-  act: source.act ?? '',
-  point: source.point ?? '',
-  ...(source.url ? { url: source.url } : {}),
-});
+/**
+ * Ссылка на норму. Возвращает undefined, если у источника нет акта или пункта:
+ * ссылка с пустым пунктом ничего не доказывает и не проходит проверку контракта.
+ */
+const refOf = (source: { act?: string; point?: string; url?: string }): NormRef | undefined =>
+  source.act && source.point
+    ? { act: source.act, point: source.point, ...(source.url ? { url: source.url } : {}) }
+    : undefined;
+
+const withRef = (ref: NormRef | undefined) => (ref ? { ref } : {});
 
 interface Base {
   kopecks: number;
@@ -93,11 +98,12 @@ function resolveBase(input: LiabilityInput, region: RegionPackage): Base {
     kopecks,
     steps: [
       {
-        label: 'Тариф',
+        // Источник тарифа — решение тарифного органа, а не пункт нормы,
+        // поэтому ссылка на норму здесь не ставится: она была бы пустой.
+        label: tariff.source.title ? `Тариф — ${tariff.source.title}` : 'Тариф',
         value: tariff.valueKopecks / 100,
         unit: tariff.unit === 'gcal' ? '₽/Гкал' : '₽/м³',
         provenance: tariff.dataKind === 'official' ? 'fact' : 'model',
-        ...(tariff.source.title ? { ref: { act: tariff.source.title, point: '' } } : {}),
       },
       {
         label: 'Норматив потребления',
@@ -130,7 +136,7 @@ interface Reduction {
   hours: number;
   thresholdReachedAt: Date | null;
   steps: LiabilityStep[];
-  ref: NormRef;
+  ref: NormRef | undefined;
 }
 
 function qualityReduction(verdict: QualityVerdict, rule: QualityRule): Reduction {
@@ -150,14 +156,14 @@ function qualityReduction(verdict: QualityVerdict, rule: QualityRule): Reduction
     unitsPerHour,
     hours: verdict.violatingHours,
     thresholdReachedAt: verdict.violated ? new Date(verdict.segments[0]?.from ?? 0) : null,
-    ref: verdict.ref,
+    ref: refOf(verdict.ref),
     steps: [
       {
         label: perStep ? 'Отклонение, шагов по 3 °C' : 'Отклонение от допустимого',
         value: perStep ? unitsPerHour : deviation,
         unit: perStep ? 'шагов' : '°C',
         provenance: 'fact',
-        ref: verdict.ref,
+        ...withRef(refOf(verdict.ref)),
       },
       {
         label: 'Часы с отклонением',
@@ -234,7 +240,7 @@ function interruptionReduction(
         value: allowance,
         unit: 'ч',
         provenance: 'fact',
-        ref: refOf(rule.source),
+        ...withRef(refOf(rule.source)),
       },
       {
         label: 'Часы сверх допустимого',
@@ -284,7 +290,7 @@ export function calcLiability(
         value: rules.interruption.rule.planned.allowedDays,
         unit: 'дней',
         provenance: 'fact',
-        ref: refOf(rules.interruption.rule.source),
+        ...withRef(refOf(rules.interruption.rule.source)),
       },
     ]);
   }
@@ -317,14 +323,14 @@ export function calcLiability(
       value: reduction.percentPerUnit,
       unit: '% в час',
       provenance: 'fact',
-      ref: reduction.ref,
+      ...withRef(reduction.ref),
     },
     {
       label: 'Снижение платы вам',
       value: apartmentKopecks / 100,
       unit: '₽',
       provenance: 'calc',
-      ref: reduction.ref,
+      ...withRef(reduction.ref),
     },
     {
       label: 'Затронуто квартир',
