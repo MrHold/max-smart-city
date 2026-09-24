@@ -93,9 +93,27 @@ const categories: Category[] = [
 ];
 
 let me: Me = {
-  userId: 'u-mock',
+  user: {
+    id: 'u-mock',
+    firstName: 'Тест',
+    lastName: 'Житель',
+    username: 'test_resident',
+    photoUrl: null,
+  },
   role: 'resident',
-  house: { id: HOUSE_ID, address: HOUSE_ADDRESS, apartmentLabel: 'кв. 48' },
+  house: { id: HOUSE_ID, address: HOUSE_ADDRESS },
+  apartmentLabel: 'кв. 48',
+  consentGiven: true,
+  memberships: [
+    {
+      role: 'resident',
+      houseId: HOUSE_ID,
+      orgId: null,
+      apartmentLabel: 'кв. 48',
+      confirmed: false,
+    },
+  ],
+  startParam: null,
 };
 
 const iso = (d: Date) => d.toISOString();
@@ -187,7 +205,7 @@ function locationText(l: NewRequestInput['location']): string {
   if (l.scope === 'yard') parts.push('двор');
   if (l.entrance) parts.push(`подъезд ${l.entrance}`);
   if (l.floor !== undefined) parts.push(`этаж ${l.floor}`);
-  if (l.scope === 'apartment' && me.house?.apartmentLabel) parts.push(me.house.apartmentLabel);
+  if (l.scope === 'apartment' && me.apartmentLabel) parts.push(me.apartmentLabel);
   if (l.note) parts.push(l.note);
   return parts.join(', ');
 }
@@ -214,7 +232,12 @@ export async function mockApi(path: string, init: RequestInit): Promise<unknown>
     const b = body as { houseId: string; apartmentLabel: string };
     const h = houses.find((x) => x.id === b.houseId);
     if (!h) throw notFound();
-    me = { ...me, house: { id: h.id, address: h.address, apartmentLabel: b.apartmentLabel } };
+    me = {
+      ...me,
+      role: 'resident',
+      house: { id: h.id, address: h.address },
+      apartmentLabel: b.apartmentLabel,
+    };
     return me;
   }
 

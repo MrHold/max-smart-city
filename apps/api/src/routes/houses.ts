@@ -1,7 +1,7 @@
 import { type Clock, HomeSchema, isOpen } from '@msc/domain';
 import type { FastifyPluginAsync } from 'fastify';
 import * as z from 'zod';
-import type { DataSource } from '../data/demo';
+import type { DataSource } from '../data/source';
 import { badRequest, notFound } from '../errors';
 
 const SearchQuery = z.object({ q: z.string().trim().min(3).max(100) });

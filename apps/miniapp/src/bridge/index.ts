@@ -13,7 +13,8 @@ export function ensureWebApp(): WebApp {
   }
   if (!installedMock) {
     const startParam = new URLSearchParams(window.location.search).get('startapp') ?? undefined;
-    window.WebApp = createMockWebApp(startParam);
+    const signed = import.meta.env.VITE_DEV_INIT_DATA || undefined;
+    window.WebApp = createMockWebApp(startParam, signed);
     installedMock = true;
   }
   return window.WebApp as WebApp;

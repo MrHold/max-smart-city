@@ -5,8 +5,9 @@ import { type Clock, systemClock } from '@msc/domain';
 import Fastify from 'fastify';
 import { makeAuthenticate } from './auth/authenticate';
 import type { AuthConfig } from './auth/config';
-import { type DataSource, demoData } from './data/demo';
+import type { DataSource } from './data/source';
 import { ApiError } from './errors';
+import { bindRoutes } from './routes/bind';
 import { housesRoutes } from './routes/houses';
 import { meRoutes } from './routes/me';
 import { photosRoutes } from './routes/photos';
@@ -14,7 +15,7 @@ import type { Storage } from './storage';
 import { diskStorage } from './storage/disk';
 
 export interface AppOptions {
-  data?: DataSource;
+  data: DataSource;
   storage?: Storage;
   clock?: Clock;
   corsOrigin?: string | boolean;
@@ -23,7 +24,7 @@ export interface AppOptions {
   auth?: AuthConfig;
 }
 
-export function buildApp(opts: AppOptions = {}) {
+export function buildApp(opts: AppOptions) {
   const app = Fastify({
     logger: opts.logger ?? false,
     bodyLimit: 1024 * 1024,
@@ -59,18 +60,21 @@ export function buildApp(opts: AppOptions = {}) {
     now: (opts.clock ?? systemClock).now().toISOString(),
   }));
 
-  app.register(housesRoutes(opts.data ?? demoData, opts.clock ?? systemClock));
+  const clock = opts.clock ?? systemClock;
+  const authenticate =
+    opts.db && opts.auth ? makeAuthenticate({ db: opts.db, config: opts.auth, clock }) : undefined;
+
+  app.register(housesRoutes(opts.data, clock));
   app.register(
-    photosRoutes(opts.storage ?? diskStorage(process.env.PHOTOS_DIR ?? './data/photos')),
+    photosRoutes(
+      opts.storage ?? diskStorage(process.env.PHOTOS_DIR ?? './data/photos'),
+      authenticate,
+    ),
   );
 
-  if (opts.db && opts.auth) {
-    const authenticate = makeAuthenticate({
-      db: opts.db,
-      config: opts.auth,
-      clock: opts.clock ?? systemClock,
-    });
+  if (opts.db && authenticate) {
     app.register(meRoutes(opts.db, authenticate));
+    app.register(bindRoutes(opts.db, authenticate));
   }
 
   return app;
