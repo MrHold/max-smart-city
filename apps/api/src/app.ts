@@ -5,10 +5,12 @@ import { type Clock, systemClock } from '@msc/domain';
 import Fastify from 'fastify';
 import { makeAuthenticate } from './auth/authenticate';
 import type { AuthConfig } from './auth/config';
+import type { DemoClock } from './clock/demo';
 import type { RegionsData } from './data/regions';
 import type { DataSource } from './data/source';
 import { ApiError } from './errors';
 import { bindRoutes } from './routes/bind';
+import { demoRoutes } from './routes/demo';
 import { dispatcherRoutes } from './routes/dispatcher';
 import { housesRoutes } from './routes/houses';
 import { meRoutes } from './routes/me';
@@ -28,6 +30,10 @@ export interface AppOptions {
   db?: Db;
   auth?: AuthConfig;
 }
+
+/** Демо-часы отличаются от обычных умением сдвигаться: только для них есть маршруты перемотки. */
+const isDemoClock = (clock: Clock): clock is DemoClock =>
+  typeof (clock as DemoClock).shift === 'function';
 
 export function buildApp(opts: AppOptions) {
   const app = Fastify({
@@ -66,8 +72,13 @@ export function buildApp(opts: AppOptions) {
   }));
 
   const clock = opts.clock ?? systemClock;
+  // Свежесть входа считается по настоящему времени: перемотка демо-часов вперёд
+  // не должна «состаривать» подпись initData и выбрасывать человека из приложения.
+  const authClock: Clock = isDemoClock(clock) ? { now: () => clock.baseNow() } : clock;
   const authenticate =
-    opts.db && opts.auth ? makeAuthenticate({ db: opts.db, config: opts.auth, clock }) : undefined;
+    opts.db && opts.auth
+      ? makeAuthenticate({ db: opts.db, config: opts.auth, clock: authClock })
+      : undefined;
 
   app.register(housesRoutes(opts.data, clock));
   app.register(
@@ -83,6 +94,10 @@ export function buildApp(opts: AppOptions) {
     if (opts.regions) {
       app.register(requestsRoutes(opts.db, opts.regions, clock, authenticate));
       app.register(dispatcherRoutes(opts.db, opts.regions, clock, authenticate));
+    }
+    if (isDemoClock(clock)) {
+      app.register(demoRoutes(clock, authenticate));
+      app.addHook('onClose', async () => clock.stop());
     }
   }
 
