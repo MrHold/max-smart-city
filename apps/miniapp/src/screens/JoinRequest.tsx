@@ -20,7 +20,7 @@ export function JoinRequest() {
   if (q.isPending || me.isPending) return <Loading />;
   if (q.isError) return <ErrorView message={q.error.message} onRetry={() => void q.refetch()} />;
   const r = q.data;
-  const label = apartment || me.data?.house?.apartmentLabel || '';
+  const label = apartment || me.data?.apartmentLabel || '';
   const needsTemp = r.kind === 'utility_quality';
 
   const submit = async () => {
@@ -84,7 +84,7 @@ export function JoinRequest() {
           id="apt"
           className="input"
           inputMode="numeric"
-          placeholder={me.data?.house?.apartmentLabel ?? '48'}
+          placeholder={me.data?.apartmentLabel ?? '48'}
           value={apartment}
           onChange={(e) => setApartment(e.target.value)}
         />

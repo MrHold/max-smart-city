@@ -57,7 +57,7 @@ export function Home() {
         <div className="eyebrow">Ваш дом</div>
         <h1 className="h1 h1--lg">{me.data.house.address}</h1>
         <div className="muted">
-          {me.data.house.apartmentLabel}
+          {me.data.apartmentLabel}
           {home.data?.org && ` · ${home.data.org.name}`}
         </div>
       </div>

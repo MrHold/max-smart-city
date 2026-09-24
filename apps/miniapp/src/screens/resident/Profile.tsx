@@ -15,7 +15,7 @@ export function Profile() {
         {me.data.house ? (
           <>
             <div style={{ fontSize: 16, fontWeight: 600 }}>{me.data.house.address}</div>
-            <div className="muted">{me.data.house.apartmentLabel}</div>
+            <div className="muted">{me.data.apartmentLabel}</div>
           </>
         ) : (
           <div className="muted">Дом не привязан</div>
@@ -25,7 +25,7 @@ export function Profile() {
         </ButtonLink>
       </Card>
       <div className="stats">
-        <Stat small value={me.data.role} label="роль" />
+        <Stat small value={me.data.role ?? 'нет'} label="роль" />
         <Stat
           small
           value={`${getPlatform()}${isMockBridge() ? ' (mock)' : ''}`}
