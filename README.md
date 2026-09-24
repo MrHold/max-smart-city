@@ -136,6 +136,7 @@ rules/federal/  федеральные нормы: ПП 354, ПП 416           
 | `VITE_API_MOCK` | `1` — мини-приложение работает на встроенном моке API, без бэкенда | `1` |
 | `VITE_DEMO_MODE` | `1` — показывать демо-часы (сдвиг времени для показа сроков) | `1` |
 | `VITE_BOT_NAME` | ник бота — для ссылок «У меня тоже» вида `max.ru/<бот>?startapp=r_<id>` | — |
+| `VITE_DEV_INIT_DATA` | подписанная initData для работы мини-приложения в браузере с настоящим API; печатает `pnpm --filter @msc/api sign-init-data` | — |
 
 Переменные `VITE_*` читаются Vite **на этапе сборки** и попадают в статику: менять их на сервере
 без пересборки образа нельзя.
@@ -182,8 +183,18 @@ rules/federal/  федеральные нормы: ПП 354, ПП 416           
 `http://localhost:5173/?startapp=r_<id>` открывает экран «У меня тоже».
 
 С `VITE_API_MOCK=1` мини-приложение работает на встроенном моке API с одной образцовой заявкой и не ходит
-в бэкенд. Чтобы работать с настоящим API: `VITE_API_MOCK=0`, запущенный `pnpm --filter @msc/api dev`
-и `CORS_ORIGIN=http://localhost:5173`.
+в бэкенд. Чтобы работать с настоящим API:
+
+```bash
+docker compose up -d db && pnpm --filter @msc/db db:migrate   # база и схема
+pnpm --filter @msc/api sign-init-data                          # последняя строка → VITE_DEV_INIT_DATA в .env
+# в .env: VITE_API_MOCK=0, CORS_ORIGIN=http://localhost:5173, BOT_TOKEN=dev-token, INIT_DATA_MAX_AGE_SEC=86400
+pnpm --filter @msc/api dev
+pnpm --filter @msc/miniapp dev
+```
+
+Подписанная initData уходит в заголовке `X-Init-Data` как есть, поэтому API принимает мок-пользователя
+как настоящего: он создаётся в базе при первом `GET /api/me`.
 
 ### API: что уже отвечает
 
@@ -193,12 +204,17 @@ rules/federal/  федеральные нормы: ПП 354, ПП 416           
 | GET | `/api/houses?q=` | поиск дома по адресу, от 3 символов |
 | GET | `/api/houses/:id/home` | контакты УК со статусом «открыто до…» по местному времени дома, объявление |
 | GET | `/api/houses/:id/categories` | категории заявок для региона дома |
-| POST | `/api/photos` | загрузка фото (`multipart`, поле `file`, до 5 МБ, JPEG/PNG/WebP/HEIC) |
+| GET | `/api/me` | кто вошёл: профиль MAX, роль, дом, согласие; первый вызов создаёт пользователя |
+| POST | `/api/me/house` | привязка к дому и квартире `{ houseId, apartmentLabel }`, возвращает `/api/me` |
+| POST | `/api/photos` | загрузка фото (`multipart`, поле `file`, до 5 МБ, JPEG/PNG/WebP/HEIC); только после входа |
 | GET | `/api/photos/*` | отдача загруженного фото |
 
+Маршруты с входом ждут заголовок `X-Init-Data` с подписанной initData из MAX; без него — `401`.
 Ошибки всегда в одном формате: `{ "error": { "code": "not_found", "message": "Дом не найден" } }`.
-Дома, организации и категории пока берутся из демо-данных (`apps/api/src/data/demo.ts`) за интерфейсом
-`DataSource` — с появлением БД и `regions/` меняется реализация, маршруты остаются.
+
+Дома, организации, контакты и категории читаются при старте из `regions/<код>/*.yaml` и `rules/federal/`
+(схемы — в `@msc/domain`, происхождение — в `data/README.md`). Дома и организации при старте
+переносятся в БД (`apps/api/src/data/seed.ts`), повторный запуск только обновляет строки.
 
 ---
 
