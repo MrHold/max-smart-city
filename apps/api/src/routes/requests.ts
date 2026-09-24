@@ -228,7 +228,10 @@ async function buildDetail(
   ]);
 
   const authorBilling = await resident(db, row.authorUserId);
-  const measurements = measurementRows.map(toMeasurement);
+  // Снижение платы автору считается по его собственным замерам. Замеры соседей
+  // подтверждают масштаб и нужны для акта, но чужой градусник не увеличивает
+  // перерасчёт по чужой квартире.
+  const measurements = measurementRows.filter((m) => m.joinerUserId === null).map(toMeasurement);
 
   const liability = liabilityOf(
     {
@@ -582,7 +585,18 @@ export const requestsRoutes =
 
       const status = row.status as RequestStatus;
       const accepted = parsed.data.accepted;
-      const next = transition(status, accepted ? 'confirm' : 'reopen');
+      // Недопустимый переход — это состояние заявки, а не сбой сервера:
+      // отвечаем 409 с объяснением, а не 500.
+      let next: RequestStatus;
+      try {
+        next = transition(status, accepted ? 'confirm' : 'reopen');
+      } catch {
+        throw conflict(
+          accepted
+            ? 'Подтверждать пока нечего: работа ещё не отмечена выполненной'
+            : 'Вернуть в работу можно только выполненную заявку',
+        );
+      }
 
       const [house] = await db
         .select({ tz: houses.tz })
