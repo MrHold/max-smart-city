@@ -246,6 +246,21 @@ export const dispatcherRoutes =
         .from(executorsTable)
         .where(eq(executorsTable.orgId, ctx.orgId));
 
+      // Время визита хранится в событии назначения: отдельной колонки под него нет.
+      const assignedEvents = ids.length
+        ? await db
+            .select({ requestId: requestEvents.requestId, payload: requestEvents.payload })
+            .from(requestEvents)
+            .where(and(inArray(requestEvents.requestId, ids), eq(requestEvents.type, 'assigned')))
+            .orderBy(asc(requestEvents.at))
+        : [];
+      const plannedByRequest = new Map(
+        assignedEvents.map((e) => [
+          e.requestId,
+          (e.payload as { plannedAt?: string | null } | null)?.plannedAt ?? null,
+        ]),
+      );
+
       const clusters = cluster(clusterable, now).map((c) => {
         const members = c.requestIds.map((id) => byId.get(id)).filter((r) => r !== undefined);
         const region = data.regions.find(
@@ -276,7 +291,11 @@ export const dispatcherRoutes =
           kopecks: c.kopecks,
           perHourKopecks: c.perHourKopecks,
           executor: executor
-            ? { id: executor.id, nameShort: executor.nameShort, plannedAt: null }
+            ? {
+                id: executor.id,
+                nameShort: executor.nameShort,
+                plannedAt: assigned ? (plannedByRequest.get(assigned.id) ?? null) : null,
+              }
             : null,
         };
       });

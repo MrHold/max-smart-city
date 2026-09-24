@@ -6,6 +6,7 @@ import {
   desc,
   enqueueNotification,
   eq,
+  executors as executorsTable,
   houses,
   inArray,
   joins,
@@ -195,6 +196,47 @@ const shareUrlFor = (id: string): string => {
   return link ? `${link}?startapp=r_${id}` : '';
 };
 
+/** Когда исполнитель обещал прийти: «26 сентября, 14:00» по местному времени дома. */
+function formatSlot(plannedAt: string, tz: string): string {
+  return new Intl.DateTimeFormat('ru-RU', {
+    timeZone: tz,
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(plannedAt));
+}
+
+/**
+ * Кто придёт и когда. Имя берётся из справочника исполнителей, время визита —
+ * из события назначения: отдельной колонки для него нет, а история заявки неизменна.
+ * Телефон не отдаём: жителю нужно знать время, а не личный номер работника.
+ */
+async function executorCard(
+  db: DbOrTx,
+  row: RequestRow,
+  eventRows: Array<typeof requestEvents.$inferSelect>,
+  tz: string,
+): Promise<RequestDetail['executor']> {
+  if (!row.executorId) return null;
+
+  const [found] = await db
+    .select({ nameShort: executorsTable.nameShort })
+    .from(executorsTable)
+    .where(eq(executorsTable.id, row.executorId))
+    .limit(1);
+  if (!found) return null;
+
+  const assigned = [...eventRows].reverse().find((e) => e.type === 'assigned');
+  const plannedAt = (assigned?.payload as { plannedAt?: string | null } | null)?.plannedAt ?? null;
+
+  return {
+    nameShort: found.nameShort,
+    slot: plannedAt ? formatSlot(plannedAt, tz) : null,
+    phone: null,
+  };
+}
+
 async function buildDetail(
   db: DbOrTx,
   data: RegionsData,
@@ -226,6 +268,8 @@ async function buildDetail(
       .orderBy(asc(requestEvents.at)),
     db.select().from(photos).where(eq(photos.requestId, row.id)).orderBy(asc(photos.at)),
   ]);
+
+  const executor = await executorCard(db, row, eventRows, house.tz);
 
   const authorBilling = await resident(db, row.authorUserId);
   // Снижение платы автору считается по его собственным замерам. Замеры соседей
@@ -292,7 +336,7 @@ async function buildDetail(
       joinedAt: j.joinedAt.toISOString(),
     })),
     liability,
-    executor: null,
+    executor,
     isAuthor,
     canJoin:
       !isAuthor &&

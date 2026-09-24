@@ -168,6 +168,29 @@ suite('кабинет диспетчера', () => {
     expect(after.clusters[0]?.executor?.nameShort).toBe(executors[0].nameShort);
   });
 
+  it('житель видит в карточке, кто придёт и когда', async () => {
+    const created = await createRequest(RESIDENT);
+    const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
+    await call('POST', '/api/dispatcher/assign', DISPATCHER, {
+      requestIds: [created.id],
+      executorId: executors[0].id,
+      plannedAt: '2026-11-10T11:00:00.000Z',
+    });
+
+    const res = await call('GET', `/api/requests/${created.id}`, RESIDENT);
+    const detail = RequestDetailSchema.parse(res.json());
+    expect(detail.executor?.nameShort).toBe(executors[0].nameShort);
+    // 11:00 UTC — это 14:00 по Казани, время показывается местное.
+    expect(detail.executor?.slot).toContain('14:00');
+    // Личный номер работника жителю не отдаём.
+    expect(detail.executor?.phone).toBeNull();
+  });
+
+  it('без назначения исполнителя в карточке нет', async () => {
+    const created = await createRequest(RESIDENT);
+    expect(created.executor).toBeNull();
+  });
+
   it('жителю уходит уведомление о назначении', async () => {
     const created = await createRequest(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
