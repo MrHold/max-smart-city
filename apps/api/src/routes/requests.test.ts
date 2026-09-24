@@ -131,6 +131,44 @@ suite('заявки', () => {
     }
   });
 
+  it('фото из формы попадает в карточку заявки', async () => {
+    // Мини-приложение сначала загружает фото, потом отправляет форму с его ключом.
+    const boundary = '----msc-test-boundary';
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="thermo.png"\r\nContent-Type: image/png\r\n\r\n`,
+      ),
+      png,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: '/api/photos',
+      headers: {
+        'x-init-data': AUTHOR,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: body,
+    });
+    expect(upload.statusCode, upload.body).toBe(200);
+    const { key } = upload.json();
+
+    const res = await call('POST', '/api/requests', AUTHOR, newRequest({ photoKeys: [key] }));
+    const detail = RequestDetailSchema.parse(res.json());
+    expect(detail.photos).toHaveLength(1);
+    expect(detail.photos[0]?.key).toBe(key);
+    expect(detail.photos[0]?.url).toBe(`/api/photos/${key}`);
+
+    // Файл действительно отдаётся по этому адресу.
+    const fetched = await app.inject({ method: 'GET', url: detail.photos[0]?.url as string });
+    expect(fetched.statusCode).toBe(200);
+  });
+
   it('не принимает дату начала из будущего', async () => {
     const res = await call('POST', '/api/requests', AUTHOR, {
       ...newRequest(),

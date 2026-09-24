@@ -85,6 +85,7 @@ export function buildApp(opts: AppOptions) {
     photosRoutes(
       opts.storage ?? diskStorage(process.env.PHOTOS_DIR ?? './data/photos'),
       authenticate,
+      opts.db,
     ),
   );
 
