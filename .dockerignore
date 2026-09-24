@@ -10,3 +10,5 @@ photos
 pgdata
 *.md
 !README.md
+**/data/photos
+.vscode
