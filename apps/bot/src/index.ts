@@ -8,7 +8,15 @@ if (!token) {
 
 const bot = new Bot(token);
 
+// Имя и id бота нужны кнопке мини-приложения: MAX открывает приложение того бота, чьё имя указано
+const me = await bot.api.getMyInfo();
+if (!me.username) {
+  console.error('У бота нет публичного имени — кнопку мини-приложения не построить');
+  process.exit(1);
+}
+
 const menu = Keyboard.inlineKeyboard([
+  [Keyboard.button.openApp('Мой дом', me.username, me.user_id)],
   [Keyboard.button.callback('Контакты УК', 'home:contacts')],
   [Keyboard.button.link('Сайт хакатона', 'https://hackathon-max.vk.company')],
 ]);
@@ -32,7 +40,6 @@ bot.catch((err) => {
   console.error('Ошибка в обработчике:', err);
 });
 
-const me = await bot.api.getMyInfo();
 const mode = process.env.BOT_MODE ?? 'polling';
 
 if (mode === 'webhook') {
