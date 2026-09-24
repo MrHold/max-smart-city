@@ -78,9 +78,10 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+     # bot сюда не добавлять: иначе «docker compose up web» запускает бота,
+    # а локальный бот с настоящим токеном снимает webhook с сервера
     depends_on:
       - api
-      - bot
 
 volumes:
   pgdata:
