@@ -1,6 +1,7 @@
 import { HomeSchema } from '@msc/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app';
+import { loadRegionsData, regionsDataSource } from './data/regions';
 import type { Storage } from './storage';
 
 const files = new Map<string, { buffer: Buffer; mime: string }>();
@@ -17,7 +18,8 @@ const memoryStorage: Storage = {
 
 // понедельник 10:30 по Казани
 const clock = { now: () => new Date('2026-11-09T07:30:00Z') };
-const app = buildApp({ storage: memoryStorage, clock });
+const data = regionsDataSource(await loadRegionsData());
+const app = buildApp({ data, storage: memoryStorage, clock });
 
 beforeAll(() => app.ready());
 afterAll(() => app.close());
