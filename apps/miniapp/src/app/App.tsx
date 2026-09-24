@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { RouterProvider, useNavigate } from 'react-router-dom';
 import { useMock } from '../api/client';
 import { getStartParam, isMockBridge } from '../bridge';
+import { DemoClockBadge, DemoClockSync } from '../clock/DemoClockControl';
 import { router } from './router';
 
 const queryClient = new QueryClient({
@@ -14,6 +15,8 @@ export function App() {
   return (
     <MaxUI colorScheme="light" className="app-root">
       <QueryClientProvider client={queryClient}>
+        <DemoClockSync />
+        <DemoClockBadge />
         <RouterProvider router={router} />
         {(isMockBridge() || useMock) && (
           <div className="mock-badge">
