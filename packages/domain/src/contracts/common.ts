@@ -44,6 +44,13 @@ export const IsoDateTime = z.iso.datetime();
 /** Деньги только в целых копейках: рубли с плавающей точкой дают 411,99999 вместо 412. */
 export const Kopecks = z.int().nonnegative();
 
+/** «кв. 48», «кв. 12а». Номер от 1 до 9999 — «кв. 9999999» проходить не должна. */
+export const ApartmentLabelSchema = z
+  .string()
+  .trim()
+  .regex(/^кв\. ?\d{1,4}[а-яё]?$/i, 'Номер квартиры — от 1 до 4 цифр, например «кв. 48»')
+  .refine((s) => Number(s.replace(/\D/g, '')) >= 1, 'Номер квартиры не может быть нулём');
+
 export const NormRefSchema = z.object({
   act: z.string().min(1),
   point: z.string().min(1),
