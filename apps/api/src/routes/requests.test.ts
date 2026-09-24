@@ -27,10 +27,19 @@ const auth: AuthConfig = {
   maxAgeSec: 3600,
 };
 
+const HOUSE = 'house-16-kazan-001';
+const OTHER_HOUSE = 'house-16-kazan-002';
+
+// Вторник, 12:30 по Казани. Заявка началась в 06:30 — шесть часов назад.
+const NOW = new Date('2026-11-10T09:30:00Z');
+const STARTED = '2026-11-10T03:30:00.000Z';
+
+// Подпись датируется теми же часами, что и у приложения: тесты живут
+// в фиксированном «сейчас», и вход с реальной датой считался бы устаревшим.
 const initDataFor = (id: number, name: string) =>
   signInitData(
     {
-      auth_date: String(Math.floor(Date.now() / 1000)),
+      auth_date: String(Math.floor(NOW.getTime() / 1000)),
       query_id: `test-${id}`,
       user: JSON.stringify({ id, first_name: name, language_code: 'ru' }),
     },
@@ -40,13 +49,6 @@ const initDataFor = (id: number, name: string) =>
 const AUTHOR = initDataFor(9001, 'Автор');
 const NEIGHBOUR = initDataFor(9002, 'Сосед');
 const STRANGER = initDataFor(9003, 'Житель другого дома');
-
-const HOUSE = 'house-16-kazan-001';
-const OTHER_HOUSE = 'house-16-kazan-002';
-
-// Вторник, 12:30 по Казани. Заявка началась в 06:30 — шесть часов назад.
-const NOW = new Date('2026-11-10T09:30:00Z');
-const STARTED = '2026-11-10T03:30:00.000Z';
 
 suite('заявки', () => {
   const { db, pool } = createDb(url as string);
