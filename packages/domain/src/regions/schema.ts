@@ -218,6 +218,16 @@ export const RegionHouseSchema = z.object({
 });
 export type RegionHouse = z.infer<typeof RegionHouseSchema>;
 
+export const RegionExecutorSchema = z.object({
+  id: z.string(),
+  orgId: z.string(),
+  /** Короткое имя для жителя: «Иванов И.». Фамилия целиком и телефон не раскрываются. */
+  nameShort: z.string(),
+  categories: z.array(z.string()).min(1),
+  dataKind: DataKindSchema,
+});
+export type RegionExecutor = z.infer<typeof RegionExecutorSchema>;
+
 const listFile = <T extends z.ZodTypeAny>(item: T) =>
   z.object({ region: z.string(), items: z.array(item) });
 
@@ -226,3 +236,4 @@ export const RegionTariffsFileSchema = listFile(TariffSchema);
 export const RegionNormativesFileSchema = listFile(NormativeSchema);
 export const RegionOrgsFileSchema = listFile(RegionOrgSchema);
 export const RegionHousesFileSchema = listFile(RegionHouseSchema);
+export const RegionExecutorsFileSchema = listFile(RegionExecutorSchema);

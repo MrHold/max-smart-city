@@ -1,6 +1,7 @@
 import { createDb } from '@msc/db';
 import { buildApp } from './app';
 import { authConfigFromEnv } from './auth/config';
+import { createDemoClock } from './clock/demo';
 import { loadRegionsData, regionsDataSource } from './data/regions';
 import { seedFromRegions } from './data/seed';
 
@@ -16,12 +17,17 @@ const auth = authConfigFromEnv();
 const regions = await loadRegionsData();
 const data = regionsDataSource(regions);
 
+// В демо-режиме время можно перематывать: сдвиг лежит в базе и общий для API и бота.
+const clock = db && process.env.DEMO_MODE === '1' ? createDemoClock(db) : undefined;
+if (clock) await clock.refresh();
+
 const app = buildApp({
   logger: true,
   corsOrigin,
   data,
   regions,
   db,
+  clock,
   auth: auth.ok ? auth.config : undefined,
 });
 

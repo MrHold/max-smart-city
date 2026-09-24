@@ -1,4 +1,4 @@
-import { contacts, type Db, eq, houses, organizations } from '@msc/db';
+import { contacts, type Db, eq, executors, houses, organizations } from '@msc/db';
 import type { RegionsData } from './regions';
 
 const dbKind = (k: 'official' | 'model') =>
@@ -11,6 +11,7 @@ const dbKind = (k: 'official' | 'model') =>
 export async function seedFromRegions(db: Db, data: RegionsData) {
   let orgCount = 0;
   let houseCount = 0;
+  let executorCount = 0;
 
   await db.transaction(async (tx) => {
     for (const r of data.regions) {
@@ -57,8 +58,17 @@ export async function seedFromRegions(db: Db, data: RegionsData) {
         }
         houseCount++;
       }
+
+      for (const e of r.executors) {
+        const row = { orgId: e.orgId, nameShort: e.nameShort, categories: e.categories };
+        await tx
+          .insert(executors)
+          .values({ id: e.id, ...row })
+          .onConflictDoUpdate({ target: executors.id, set: row });
+        executorCount++;
+      }
     }
   });
 
-  return { orgs: orgCount, houses: houseCount };
+  return { orgs: orgCount, houses: houseCount, executors: executorCount };
 }
