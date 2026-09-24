@@ -1,4 +1,4 @@
-import { parseEncKey } from './identity';
+import { parseEncKey } from '@msc/db';
 
 export interface AuthConfig {
   /** Токен бота: им MAX подписывает initData */

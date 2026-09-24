@@ -1,9 +1,8 @@
-import { type Db, eq, users } from '@msc/db';
+import { type Db, encryptUserId, eq, userHash, users } from '@msc/db';
 import type { Clock } from '@msc/domain';
 import type { FastifyRequest } from 'fastify';
 import { ApiError } from '../errors';
 import type { AuthConfig } from './config';
-import { encryptUserId, userHash } from './identity';
 import { type MaxUser, validateInitData } from './init-data';
 
 /** Кто делает запрос. Кладётся в req.auth после проверки initData. */

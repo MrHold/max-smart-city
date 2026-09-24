@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { decryptUserId, encryptUserId, parseEncKey, userHash } from '@msc/db';
 import { describe, expect, it } from 'vitest';
-import { decryptUserId, encryptUserId, parseEncKey, userHash } from './identity';
 import { signInitData, validateInitData } from './init-data';
 
 const TOKEN = 'test-bot-token';
