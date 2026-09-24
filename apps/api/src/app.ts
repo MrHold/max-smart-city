@@ -18,7 +18,7 @@ export interface AppOptions {
   data: DataSource;
   storage?: Storage;
   clock?: Clock;
-  corsOrigin?: string | boolean;
+  corsOrigin?: string | string[] | boolean;
   logger?: boolean;
   db?: Db;
   auth?: AuthConfig;
