@@ -23,6 +23,16 @@ export const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
 const readYaml = async (path: string): Promise<unknown> => parse(await readFile(path, 'utf8'));
 
+/** Часть файлов региона необязательна: регион можно подключить без списка исполнителей. */
+const fileIfExists = async (path: string): Promise<unknown> => {
+  try {
+    return await readYaml(path);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw e;
+  }
+};
+
 /** Читает rules/federal и все regions/<код>; каждый файл проверяется схемами из @msc/domain. */
 export async function loadRegionsData(
   root = process.env.DATA_ROOT ?? repoRoot,
@@ -49,6 +59,7 @@ export async function loadRegionsData(
         normatives: await file('normatives.yaml'),
         orgs: await file('orgs.yaml'),
         houses: await file('houses.yaml'),
+        executors: await fileIfExists(join(dir, 'executors.yaml')),
       }),
     );
   }

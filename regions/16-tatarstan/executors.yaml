@@ -1,0 +1,21 @@
+# Исполнители управляющей организации. Жителю показывается только короткое имя:
+# «Иванов И.» — ни фамилии целиком, ни личного телефона.
+region: '16'
+items:
+  - id: exe-16-uyut-santeh
+    orgId: org-16-uyut
+    nameShort: Иванов И.
+    categories: [heating, heating_off, hot_water, hot_water_off, cold_water_off]
+    dataKind: model
+
+  - id: exe-16-uyut-elektrik
+    orgId: org-16-uyut
+    nameShort: Петров С.
+    categories: [entrance_light, yard_lighting, elevator]
+    dataKind: model
+
+  - id: exe-16-uyut-dvor
+    orgId: org-16-uyut
+    nameShort: Сидорова А.
+    categories: [yard_cleaning, entrance_cleaning, playground, entrance_door]
+    dataKind: model

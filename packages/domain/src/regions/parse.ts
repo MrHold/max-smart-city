@@ -6,6 +6,7 @@ import type {
   Normative,
   QualityRule,
   RegionCategory,
+  RegionExecutor,
   RegionHouse,
   RegionMeta,
   RegionOrg,
@@ -17,6 +18,7 @@ import {
   InterruptionRulesFileSchema,
   QualityRulesFileSchema,
   RegionCategoriesFileSchema,
+  RegionExecutorsFileSchema,
   RegionHousesFileSchema,
   RegionMetaSchema,
   RegionNormativesFileSchema,
@@ -41,6 +43,7 @@ export interface RegionPackage {
   normatives: Normative[];
   orgs: RegionOrg[];
   houses: RegionHouse[];
+  executors: RegionExecutor[];
 }
 
 /** Сырые данные одного пакета: разобранный YAML приходит снаружи, файлы читает приложение. */
@@ -58,6 +61,8 @@ export interface RawRegionPackage {
   normatives: unknown;
   orgs: unknown;
   houses: unknown;
+  /** Может отсутствовать: регион подключают без списка исполнителей. */
+  executors?: unknown;
 }
 
 function parseFile<T>(schema: z.ZodType<T>, raw: unknown, where: string): T {
@@ -123,6 +128,10 @@ export function parseRegionPackage(raw: RawRegionPackage): RegionPackage {
   );
   const orgs = parseFile(RegionOrgsFileSchema, raw.orgs, where('orgs.yaml'));
   const houses = parseFile(RegionHousesFileSchema, raw.houses, where('houses.yaml'));
+  const executors =
+    raw.executors === undefined
+      ? { region: meta.code, items: [] }
+      : parseFile(RegionExecutorsFileSchema, raw.executors, where('executors.yaml'));
 
   for (const [file, data] of [
     ['categories.yaml', categories],
@@ -130,6 +139,7 @@ export function parseRegionPackage(raw: RawRegionPackage): RegionPackage {
     ['normatives.yaml', normatives],
     ['orgs.yaml', orgs],
     ['houses.yaml', houses],
+    ['executors.yaml', executors],
   ] as const) {
     if (data.region !== meta.code) {
       throw new Error(
@@ -147,6 +157,22 @@ export function parseRegionPackage(raw: RawRegionPackage): RegionPackage {
     }
   }
 
+  const categoryCodes = new Set(categories.items.map((c) => c.code));
+  for (const executor of executors.items) {
+    if (!orgIds.has(executor.orgId)) {
+      throw new Error(
+        `${where('executors.yaml')}: исполнитель ${executor.id} ссылается на неизвестную организацию ${executor.orgId}`,
+      );
+    }
+    for (const code of executor.categories) {
+      if (!categoryCodes.has(code)) {
+        throw new Error(
+          `${where('executors.yaml')}: исполнитель ${executor.id} закреплён за неизвестной категорией ${code}`,
+        );
+      }
+    }
+  }
+
   return {
     meta,
     categories: categories.items,
@@ -154,6 +180,7 @@ export function parseRegionPackage(raw: RawRegionPackage): RegionPackage {
     normatives: normatives.items,
     orgs: orgs.items,
     houses: houses.items,
+    executors: executors.items,
   };
 }
 

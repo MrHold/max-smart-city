@@ -114,6 +114,7 @@ const region: RegionPackage = {
   ],
   orgs: [],
   houses: [],
+  executors: [],
 };
 
 const now = new Date('2026-11-09T12:00:00Z');

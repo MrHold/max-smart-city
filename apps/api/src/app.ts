@@ -9,6 +9,7 @@ import type { RegionsData } from './data/regions';
 import type { DataSource } from './data/source';
 import { ApiError } from './errors';
 import { bindRoutes } from './routes/bind';
+import { dispatcherRoutes } from './routes/dispatcher';
 import { housesRoutes } from './routes/houses';
 import { meRoutes } from './routes/me';
 import { photosRoutes } from './routes/photos';
@@ -81,6 +82,7 @@ export function buildApp(opts: AppOptions) {
     app.register(bindRoutes(opts.db, authenticate));
     if (opts.regions) {
       app.register(requestsRoutes(opts.db, opts.regions, clock, authenticate));
+      app.register(dispatcherRoutes(opts.db, opts.regions, clock, authenticate));
     }
   }
 

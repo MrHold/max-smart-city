@@ -22,6 +22,7 @@ const readRegion = (code: string) => ({
   normatives: read(`regions/${code}/normatives.yaml`),
   orgs: read(`regions/${code}/orgs.yaml`),
   houses: read(`regions/${code}/houses.yaml`),
+  executors: read(`regions/${code}/executors.yaml`),
 });
 
 describe('федеральные правила', () => {
@@ -81,6 +82,26 @@ describe('пакет региона 16', () => {
     const raw = readRegion('16-tatarstan');
     const broken = { ...raw, tariffs: { ...(raw.tariffs as object), region: '77' } };
     expect(() => parseRegionPackage(broken)).toThrow(/не совпадает/);
+  });
+
+  it('исполнители закреплены за существующими категориями', () => {
+    const codes = new Set(region.categories.map((c) => c.code));
+    for (const e of region.executors) {
+      for (const code of e.categories) expect(codes.has(code), `${e.id}: ${code}`).toBe(true);
+    }
+  });
+
+  it('ловит исполнителя с несуществующей категорией', () => {
+    const raw = readRegion('16-tatarstan');
+    const file = raw.executors as { region: string; items: Array<Record<string, unknown>> };
+    const broken = {
+      ...raw,
+      executors: {
+        ...file,
+        items: file.items.map((e, i) => (i === 0 ? { ...e, categories: ['нет_такой'] } : e)),
+      },
+    };
+    expect(() => parseRegionPackage(broken)).toThrow(/неизвестной категорией/);
   });
 
   it('ловит ссылку на несуществующую организацию', () => {
