@@ -33,8 +33,10 @@ export function notificationText(p: Payload): string {
       return `Заявка ${no} отклонена. Причина: ${p.reason ?? 'не указана'}.`;
     case 'assigned': {
       const when = formatDate(p.plannedAt);
-      const who = p.nameShort ? `: ${p.nameShort}` : '';
-      return `По заявке ${no} назначен исполнитель${who}.${when ? ` Плановое время — ${when}.` : ''}`;
+      const name = typeof p.nameShort === 'string' ? p.nameShort : '';
+      // «Иванов И.» уже кончается точкой — вторую не ставим
+      const who = name ? `: ${name}${name.endsWith('.') ? '' : '.'}` : '.';
+      return `По заявке ${no} назначен исполнитель${who}${when ? ` Плановое время — ${when}.` : ''}`;
     }
     case 'completed':
       return `Работа по заявке ${no} выполнена. Проверьте результат и подтвердите в приложении.`;
