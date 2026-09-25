@@ -17,6 +17,7 @@ import { documentsRoutes } from './routes/documents';
 import { housesRoutes } from './routes/houses';
 import { meRoutes } from './routes/me';
 import { photosRoutes } from './routes/photos';
+import { privacyRoutes } from './routes/privacy';
 import { requestsRoutes } from './routes/requests';
 import type { Storage } from './storage';
 import { diskStorage } from './storage/disk';
@@ -107,6 +108,7 @@ export function buildApp(opts: AppOptions) {
   if (opts.db && authenticate) {
     app.register(meRoutes(opts.db, authenticate));
     app.register(bindRoutes(opts.db, authenticate));
+    app.register(privacyRoutes(opts.db, clock, authenticate));
     if (opts.regions) {
       app.register(requestsRoutes(opts.db, opts.regions, clock, authenticate));
       app.register(dispatcherRoutes(opts.db, opts.regions, clock, authenticate));
