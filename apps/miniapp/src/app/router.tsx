@@ -5,6 +5,7 @@ import { BindHouse } from '../screens/resident/BindHouse';
 import { Contacts } from '../screens/resident/Contacts';
 import { Home } from '../screens/resident/Home';
 import { House } from '../screens/resident/House';
+import { MyData } from '../screens/resident/MyData';
 import { NewRequest } from '../screens/resident/NewRequest';
 import { Profile } from '../screens/resident/Profile';
 import { RequestCard } from '../screens/resident/RequestCard';
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { path: '/requests/:id', element: <RequestCard /> },
       { path: '/house', element: <House /> },
       { path: '/profile', element: <Profile /> },
+      { path: '/profile/data', element: <MyData /> },
     ],
   },
   {
