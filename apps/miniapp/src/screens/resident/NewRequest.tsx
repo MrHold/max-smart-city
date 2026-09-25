@@ -5,6 +5,7 @@ import type { Category, LocationScope, MeasurementPlace, NewRequestInput } from 
 import { toLocalInputValue } from '../../lib/format';
 import { Button, Card, cx, ErrorView, Field, Loading, StepProgress, Tile } from '../../ui';
 import {
+  IconArrowLeft,
   IconBroom,
   IconBulb,
   IconCamera,
@@ -145,13 +146,32 @@ export function NewRequest() {
     }
   };
 
+  const goBack = () => {
+    setError(null);
+    if (step > 1) setStep(step - 1);
+    else if (window.history.length > 1) navigate(-1);
+    else navigate('/', { replace: true });
+  };
+
   return (
     <main className="page page--no-tabbar page--with-cta">
       <div className="stack-8">
+        <button type="button" className="back-link" onClick={goBack}>
+          <IconArrowLeft size={18} />
+          Назад
+        </button>
         <StepProgress step={step} total={3} />
         <h1 className="h1">
           {step === 1 ? 'Что случилось?' : step === 2 ? 'Где и когда?' : 'Проверьте заявку'}
         </h1>
+        {step > 1 && category && (
+          <div className="muted">
+            {category.title} ·{' '}
+            <button type="button" className="link-btn" onClick={() => setStep(1)}>
+              изменить
+            </button>
+          </div>
+        )}
       </div>
 
       {step === 1 && (
@@ -372,11 +392,9 @@ export function NewRequest() {
       {error && <div className="field__error">{error}</div>}
 
       <div className="cta">
-        {step > 1 && (
-          <Button variant="secondary" onClick={() => setStep(step - 1)} style={{ flexGrow: 0 }}>
-            Назад
-          </Button>
-        )}
+        <Button variant="secondary" onClick={goBack} style={{ flexGrow: 0 }}>
+          Назад
+        </Button>
         {step === 1 && (
           <Button size="lg" disabled={!category} onClick={() => setStep(2)}>
             Далее: где это?

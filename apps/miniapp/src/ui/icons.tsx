@@ -54,6 +54,11 @@ export const IconUser = ({ size, ...r }: P) => (
     <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
   </Svg>
 );
+export const IconArrowLeft = ({ size, ...r }: P) => (
+  <Svg size={size} {...r}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
+  </Svg>
+);
 export const IconChevron = ({ size, ...r }: P) => (
   <Svg size={size} {...r}>
     <path d="M9 6l6 6-6 6" />
