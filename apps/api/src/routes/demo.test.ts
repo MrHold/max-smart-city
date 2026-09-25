@@ -181,6 +181,65 @@ suite('демо-часы', () => {
     expect(gji.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 
+  it('документ открывается по временной ссылке без заголовка входа', async () => {
+    const created = await createRequest();
+    await call('POST', '/api/demo/clock', { shiftHours: 6 });
+
+    // Кнопка в мини-приложении открывает адрес обычным переходом: заголовков нет.
+    const naked = await app.inject({
+      method: 'GET',
+      url: `/api/requests/${created.id}/documents/claim.pdf`,
+    });
+    expect(naked.statusCode).toBe(401);
+
+    const link = await call('POST', `/api/requests/${created.id}/documents/claim/link`);
+    expect(link.statusCode, link.body).toBe(200);
+    const { url, expiresAt } = link.json();
+    expect(url).toContain('sig=');
+    expect(new Date(expiresAt).getTime()).toBeGreaterThan(Date.now());
+
+    const pdf = await app.inject({ method: 'GET', url });
+    expect(pdf.statusCode, pdf.body.slice(0, 200)).toBe(200);
+    expect(pdf.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+
+  it('ссылка на документ приходит сразу в карточке', async () => {
+    const created = await createRequest();
+    await call('POST', '/api/demo/clock', { shiftHours: 6 });
+
+    const detail = RequestDetailSchema.parse(
+      (await call('GET', `/api/requests/${created.id}`)).json(),
+    );
+    expect(detail.claim.available).toBe(true);
+    expect(detail.claim.url).toContain('sig=');
+
+    const pdf = await app.inject({ method: 'GET', url: detail.claim.url as string });
+    expect(pdf.statusCode).toBe(200);
+  });
+
+  it('подделанная и просроченная ссылки не работают', async () => {
+    const created = await createRequest();
+    await call('POST', '/api/demo/clock', { shiftHours: 6 });
+    const { url } = (await call('POST', `/api/requests/${created.id}/documents/claim/link`)).json();
+
+    const spoiled = url.replace(/sig=[^&]+/, 'sig=подделка');
+    expect((await app.inject({ method: 'GET', url: spoiled })).statusCode).toBe(403);
+
+    // Перематываем время за срок жизни ссылки.
+    await call('POST', '/api/demo/clock', { shiftHours: 24 });
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(403);
+  });
+
+  it('ссылку на жалобу не выдают раньше срока', async () => {
+    const created = await createRequest();
+    const early = await call('POST', `/api/requests/${created.id}/documents/gji/link`);
+    expect(early.statusCode).toBe(409);
+
+    await call('POST', '/api/demo/clock', { shiftHours: 6 });
+    const later = await call('POST', `/api/requests/${created.id}/documents/gji/link`);
+    expect(later.statusCode).toBe(200);
+  });
+
   it('чужие документы не отдаются', async () => {
     const created = await createRequest();
     await call('POST', '/api/demo/clock', { shiftHours: 6 });
