@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useConfirmRequest, useRequest } from '../../api/hooks';
+import { useConfirmRequest, useOpenDocument, useRequest } from '../../api/hooks';
 import type { Liability, RequestDetail } from '../../api/types';
 import { ensureWebApp } from '../../bridge';
 import { demoClock, useDemoOffset } from '../../clock';
@@ -161,6 +161,7 @@ export function RequestCard() {
   const { id } = useParams();
   const q = useRequest(id);
   const confirm = useConfirmRequest(id ?? '');
+  const doc = useOpenDocument();
 
   if (q.isPending) return <Loading />;
   if (q.isError) return <ErrorView message={q.error.message} onRetry={() => void q.refetch()} />;
@@ -251,27 +252,47 @@ export function RequestCard() {
         </div>
       </Card>
 
-      {(r.claim.available || r.gji.available) && (
+      {r.isAuthor && (r.claim.available || r.gji.available || r.gji.afterAt) && (
         <Card className="card__section">
           <div className="eyebrow">Документы</div>
           {r.claim.available && (
-            <a
-              className="btn btn--secondary"
-              href={r.claim.url ?? '#'}
-              target="_blank"
-              rel="noreferrer"
+            <Button
+              variant="secondary"
+              loading={doc.isPending && doc.variables?.filename.startsWith('claim')}
+              onClick={() =>
+                doc.mutate({
+                  path: r.claim.url ?? `/api/requests/${r.id}/documents/claim.pdf`,
+                  filename: `claim-${r.number}.pdf`,
+                })
+              }
             >
               Заявление на перерасчёт (PDF)
-            </a>
+            </Button>
           )}
           {r.gji.available ? (
-            <Button variant="secondary">Жалоба в ГЖИ</Button>
+            <Button
+              variant="secondary"
+              loading={doc.isPending && doc.variables?.filename.startsWith('gji')}
+              onClick={() =>
+                doc.mutate({
+                  path: `/api/requests/${r.id}/documents/gji.pdf`,
+                  filename: `gji-${r.number}.pdf`,
+                })
+              }
+            >
+              Обращение в жилищную инспекцию (PDF)
+            </Button>
           ) : r.gji.afterAt ? (
             <div className="hint">
-              Жалоба в ГЖИ станет доступна после истечения срока ответа УК —{' '}
-              {fmtDateTime(r.gji.afterAt)}.
+              Обращение в ГЖИ станет доступно после истечения срока ответа УК —{' '}
+              {fmtDateTime(r.gji.afterAt)}: раньше его вернут как преждевременное.
             </div>
           ) : null}
+          {doc.isError && <div className="field__error">{doc.error.message}</div>}
+          <div className="hint">
+            Документы собираются из данных заявки: период нарушения, замеры, расчёт со ссылками на
+            нормы и список присоединившихся квартир.
+          </div>
         </Card>
       )}
     </main>
