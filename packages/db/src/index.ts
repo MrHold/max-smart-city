@@ -4,5 +4,6 @@ export { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql }
 export * from './client';
 export * from './helpers';
 export * from './identity';
+export * from './invite';
 export { runMigrations } from './migrate';
 export * from './schema';

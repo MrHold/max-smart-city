@@ -14,10 +14,10 @@ import {
   requests,
   userHash,
   users,
+  verifyInvite,
 } from '@msc/db';
 import { type RequestStatus, TransitionError, transition, type WorkflowEvent } from '@msc/domain';
 import { nowFor } from './clock';
-import { verifyInvite } from './invite';
 import { orderKeyboard } from './keyboards';
 
 type Deps = { db: Db; hashSecret: string; encKey: Buffer; demoMode: boolean };

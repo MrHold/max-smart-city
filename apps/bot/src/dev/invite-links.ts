@@ -1,5 +1,4 @@
-import { asc, createDb, executors } from '@msc/db';
-import { inviteToken } from '../invite';
+import { asc, createDb, executors, inviteToken } from '@msc/db';
 
 // Печатает ссылки-приглашения для всех исполнителей. Ссылку отдают исполнителю:
 // он открывает её в MAX, и бот привязывает его аккаунт к записи в executors.

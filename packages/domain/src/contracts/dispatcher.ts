@@ -49,8 +49,14 @@ export const ExecutorSchema = z.object({
   id: z.string(),
   nameShort: z.string(),
   categories: z.array(z.string()),
+  /** Исполнитель открыл приглашение и получает наряды в боте. false — назначить можно, но наряд не придёт. */
+  inBot: z.boolean(),
 });
 export type Executor = z.infer<typeof ExecutorSchema>;
+
+/** Ссылка-приглашение в бот: исполнитель открывает её в MAX и начинает получать наряды. */
+export const ExecutorInviteSchema = z.object({ url: z.string().url() });
+export type ExecutorInvite = z.infer<typeof ExecutorInviteSchema>;
 
 /** Действие применяется сразу ко всем заявкам кластера: в этом и смысл группировки. */
 const RequestIds = z.array(z.string()).min(1).max(200);

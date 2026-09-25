@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { createDb, parseEncKey, runMigrations, sql } from '@msc/db';
+import { createDb, parseEncKey, runMigrations, sql, verifyInvite } from '@msc/db';
 import { DispatcherInboxSchema, ExecutorSchema, RequestDetailSchema } from '@msc/domain';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app';
@@ -144,6 +144,29 @@ suite('кабинет диспетчера', () => {
     const list = res.json().map((e: unknown) => ExecutorSchema.parse(e));
     expect(list.length).toBeGreaterThan(0);
     expect(list.some((e: { categories: string[] }) => e.categories.includes('heating'))).toBe(true);
+  });
+
+  it('исполнители: видно, подключён ли к боту, и есть ссылка-приглашение', async () => {
+    const list = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
+    const first = ExecutorSchema.parse(list[0]);
+    expect(typeof first.inBot).toBe('boolean');
+
+    process.env.APP_LINK = 'https://max.ru/test_bot';
+    process.env.USER_HASH_SECRET ??= 'test-secret';
+    const res = await call('GET', `/api/dispatcher/executors/${first.id}/invite`, DISPATCHER);
+    expect(res.statusCode).toBe(200);
+    const url: string = res.json().url;
+    expect(url).toMatch(/^https:\/\/max\.ru\/test_bot\?start=inv_/);
+    // бот примет эту ссылку: подпись сходится и указывает на того же исполнителя
+    expect(verifyInvite(url.split('start=')[1] ?? '', process.env.USER_HASH_SECRET)).toBe(first.id);
+
+    // житель без роли диспетчера ссылку не получит
+    const denied = await call('GET', `/api/dispatcher/executors/${first.id}/invite`, RESIDENT);
+    expect(denied.statusCode).not.toBe(200);
+
+    // несуществующий или чужой исполнитель — 404
+    const missing = await call('GET', '/api/dispatcher/executors/nope/invite', DISPATCHER);
+    expect(missing.statusCode).toBe(404);
   });
 
   it('назначение исполнителя меняет все заявки кластера сразу', async () => {
