@@ -1,10 +1,14 @@
-import { useMe } from '../../api/hooks';
+import { useNavigate } from 'react-router-dom';
+import { useBecomeDispatcher, useMe } from '../../api/hooks';
 import { getPlatform, isMockBridge } from '../../bridge';
+import { isDemoMode } from '../../clock';
 import { DemoClockControl } from '../../clock/DemoClockControl';
-import { ButtonLink, Card, ErrorView, Loading, PageHeader, Stat } from '../../ui';
+import { Button, ButtonLink, Card, ErrorView, Loading, PageHeader, Stat } from '../../ui';
 
 export function Profile() {
   const me = useMe();
+  const become = useBecomeDispatcher();
+  const navigate = useNavigate();
   if (me.isPending) return <Loading />;
   if (me.isError) return <ErrorView message={me.error.message} onRetry={() => void me.refetch()} />;
   return (
@@ -32,6 +36,34 @@ export function Profile() {
           label="платформа"
         />
       </div>
+      <Card className="card__section">
+        <div className="eyebrow">Управляющая организация</div>
+        {me.data.role === 'dispatcher' ? (
+          <>
+            <div className="muted">Вам доступны входящие по домам организации.</div>
+            <ButtonLink to="/dispatcher" size="sm">
+              Кабинет диспетчера
+            </ButtonLink>
+          </>
+        ) : isDemoMode ? (
+          <>
+            <div className="muted">
+              Демо: посмотреть заявку со стороны УК можно этим же аккаунтом.
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={become.isPending}
+              onClick={() => become.mutate(undefined, { onSuccess: () => navigate('/dispatcher') })}
+            >
+              Стать диспетчером
+            </Button>
+            {become.isError && <div className="field__error">{become.error.message}</div>}
+          </>
+        ) : (
+          <div className="muted">Роль диспетчера выдаёт управляющая организация.</div>
+        )}
+      </Card>
       <Card className="card__section">
         <div className="eyebrow">Персональные данные</div>
         <div className="muted">

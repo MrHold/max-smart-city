@@ -4,7 +4,7 @@ import type { Contact } from '../../api/types';
 import { fmtDate } from '../../lib/format';
 import { closedStatuses, statusLabel, statusTone } from '../../lib/request';
 import { ButtonLink, CallButton, Card, Chip, ErrorView, Loading, SectionHeader } from '../../ui';
-import { IconPlus } from '../../ui/icons';
+import { IconChevron, IconPlus } from '../../ui/icons';
 
 const contactTitle: Record<Contact['kind'], string> = {
   dispatcher: 'Диспетчер УК',
@@ -61,6 +61,15 @@ export function Home() {
           {home.data?.org && ` · ${home.data.org.name}`}
         </div>
       </div>
+
+      {me.data.role === 'dispatcher' && (
+        <Link to="/dispatcher" className="banner banner--accent">
+          <div className="grow" style={{ fontSize: 14 }}>
+            <strong>Кабинет диспетчера</strong> — входящие по домам организации
+          </div>
+          <IconChevron size={18} />
+        </Link>
+      )}
 
       <div className="stack-8">
         <SectionHeader title="Кому звонить сейчас" action="График" to="/contacts" />
