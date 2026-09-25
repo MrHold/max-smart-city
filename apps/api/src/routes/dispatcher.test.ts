@@ -204,6 +204,46 @@ suite('кабинет диспетчера', () => {
     expect(payloads.some((p) => p.type === 'assigned')).toBe(true);
   });
 
+  it('привязанному исполнителю уходит наряд с адресом', async () => {
+    const created = await createRequest(RESIDENT);
+    const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
+
+    // Исполнителя связывает с аккаунтом MAX приглашение; здесь привязку делаем напрямую.
+    const [someone] = await db.execute(sql`select id from users limit 1`).then((r) => r.rows);
+    await db.execute(
+      sql`update executors set user_id = ${someone?.id as string} where id = ${executors[0].id}`,
+    );
+
+    await call('POST', '/api/dispatcher/assign', DISPATCHER, {
+      requestIds: [created.id],
+      executorId: executors[0].id,
+      plannedAt: '2026-11-10T11:00:00.000Z',
+    });
+
+    const rows = await db.execute(sql`select payload from outbox`);
+    const order = rows.rows
+      .map((r) => r.payload as { type: string; address?: string; description?: string })
+      .find((p) => p.type === 'order');
+    expect(order?.address).toContain('Садовая');
+    expect(order?.description).toBeTruthy();
+  });
+
+  it('без привязки исполнителя к аккаунту наряд не отправляется, но заявка назначена', async () => {
+    const created = await createRequest(RESIDENT);
+    const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
+
+    const res = await call('POST', '/api/dispatcher/assign', DISPATCHER, {
+      requestIds: [created.id],
+      executorId: executors[0].id,
+    });
+    expect(res.json().updated).toBe(1);
+
+    const rows = await db.execute(sql`select payload from outbox`);
+    const types = rows.rows.map((r) => (r.payload as { type: string }).type);
+    expect(types).toContain('assigned');
+    expect(types).not.toContain('order');
+  });
+
   it('заявка чужой организации в массовом действии пропускается', async () => {
     const created = await createRequest(RESIDENT);
     // Дом переходит под управление другой организации: её диспетчер к нему отношения не имеет.

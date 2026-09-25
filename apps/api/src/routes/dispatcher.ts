@@ -376,6 +376,10 @@ export const dispatcherRoutes =
       eventType: string,
       payload: (row: typeof requests.$inferSelect) => Record<string, unknown> = () => ({}),
       notify?: (row: typeof requests.$inferSelect) => Record<string, unknown>,
+      /** Второй адресат уведомления — например, исполнитель, получающий наряд. */
+      notifyAlso?: (
+        row: typeof requests.$inferSelect,
+      ) => { userId: string; payload: Record<string, unknown> } | null,
     ): Promise<BulkResult> {
       const ctx = await requireDispatcher(userId);
       const now = clock.now();
@@ -420,6 +424,8 @@ export const dispatcherRoutes =
           });
 
           if (notify) await enqueueNotification(tx, row.authorUserId, notify(row));
+          const extra = notifyAlso?.(row);
+          if (extra) await enqueueNotification(tx, extra.userId, extra.payload);
           updated++;
         }
       });
@@ -470,6 +476,14 @@ export const dispatcherRoutes =
         .limit(1);
       if (!executor) throw notFound('Исполнитель');
 
+      // Адреса нужны наряду: исполнителю бесполезен номер заявки без дома.
+      const addressRows = await db
+        .select({ requestId: requests.id, address: houses.address, category: requests.category })
+        .from(requests)
+        .innerJoin(houses, eq(requests.houseId, houses.id))
+        .where(inArray(requests.id, parsed.data.requestIds));
+      const addressOf = new Map(addressRows.map((r) => [r.requestId, r.address]));
+
       return bulk(
         userId,
         parsed.data.requestIds,
@@ -484,6 +498,23 @@ export const dispatcherRoutes =
           nameShort: executor.nameShort,
           plannedAt: plannedAt ?? null,
         }),
+        // Наряд самому исполнителю — если он привязан к аккаунту MAX.
+        // Пока привязки нет, наряд просто не отправляется: заявка всё равно назначена.
+        (row) =>
+          executor.userId
+            ? {
+                userId: executor.userId,
+                payload: {
+                  type: 'order',
+                  requestId: row.id,
+                  number: row.number,
+                  address: addressOf.get(row.id) ?? '',
+                  category: row.category,
+                  description: row.description,
+                  plannedAt: plannedAt ?? null,
+                },
+              }
+            : null,
       );
     });
 

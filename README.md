@@ -176,6 +176,19 @@ rules/federal/  федеральные нормы: ПП 354, ПП 416           
 | `pnpm --filter @msc/miniapp dev` | мини-приложение в браузере, `http://localhost:5173` |
 | `pnpm --filter @msc/miniapp build` | собрать статику в `apps/miniapp/dist` |
 
+### Docker Desktop не стартует после падения
+
+Если при запуске выпадает «An unexpected error occurred» с текстом про
+`rename …sock …stale: The file cannot be accessed by the system` — это файлы сокетов
+от прошлого аварийного завершения. Нажать **Quit** (не «Reset to factory defaults»,
+она сносит контейнеры и образы) и из WSL выполнить:
+
+```bash
+bash scripts/fix-docker-desktop.sh
+```
+
+Контейнеры, образы и база при этом не страдают: они внутри виртуальной машины.
+
 ### Демо-часы
 
 Ждать два часа, пока истечёт срок и откроется жалоба в ГЖИ, на защите никто не будет,
