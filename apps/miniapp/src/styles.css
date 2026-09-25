@@ -89,6 +89,24 @@ p {
   text-transform: uppercase;
   color: var(--ink-2);
 }
+.back-link,
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.back-link {
+  align-self: flex-start;
+  margin-left: -2px;
+}
 .eyebrow--accent {
   color: var(--accent);
 }
