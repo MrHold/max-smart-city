@@ -1,9 +1,11 @@
 import type { DeleteMeResult, DemoClockInput, DemoClockState, MyData } from '@msc/domain';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ensureWebApp, getPlatform } from '../bridge';
 import { applyDemoOffset, isDemoMode } from '../clock';
-import { api, apiBlob, json, openBlob } from './client';
+import { absoluteApiUrl, api, apiBlob, json, openBlob } from './client';
 import type {
   Category,
+  DocumentLink,
   Home,
   HouseSearchItem,
   JoinInput,
@@ -144,11 +146,37 @@ export function useShiftDemoClock() {
   });
 }
 
+export type DocumentKind = 'claim' | 'gji';
+
+interface OpenDocumentInput {
+  requestId: string;
+  kind: DocumentKind;
+  filename: string;
+  /** Подписанная ссылка из карточки, если сервер её уже выдал: тогда лишнего запроса не будет. */
+  signedUrl?: string | null;
+}
+
+/**
+ * MAX Bridge не скачивает файлы по href и blob-ссылкам — только через downloadFile по https,
+ * без заголовков. Поэтому внутри MAX берём подписанную ссылку и отдаём её клиенту;
+ * в обычном браузере качаем сами с заголовком входа.
+ */
 export function useOpenDocument() {
   return useMutation({
-    mutationFn: async ({ path, filename }: { path: string; filename: string }) => {
-      const blob = await apiBlob(path);
-      openBlob(blob, filename);
+    mutationFn: async ({ requestId, kind, filename, signedUrl }: OpenDocumentInput) => {
+      const wa = ensureWebApp();
+      if (typeof wa.downloadFile !== 'function') {
+        const blob = await apiBlob(`/api/requests/${requestId}/documents/${kind}.pdf`);
+        openBlob(blob, filename);
+        return;
+      }
+      const path =
+        signedUrl ??
+        (await api<DocumentLink>(`/api/requests/${requestId}/documents/${kind}/link`, json({})))
+          .url;
+      const url = absoluteApiUrl(path);
+      if (getPlatform() === 'web' && wa.openLink) wa.openLink(url);
+      else await wa.downloadFile?.(url, filename);
     },
   });
 }

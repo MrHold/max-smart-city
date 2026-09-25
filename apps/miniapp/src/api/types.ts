@@ -24,3 +24,8 @@ export type {
   Schedule,
   Service,
 } from '@msc/domain';
+
+export interface DocumentLink {
+  url: string;
+  expiresAt: string;
+}

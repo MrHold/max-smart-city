@@ -386,6 +386,23 @@ export async function mockApi(path: string, init: RequestInit): Promise<unknown>
     };
   }
 
+  if (method === 'POST' && /^\/api\/requests\/[^/]+\/documents\/(claim|gji)\/link$/.test(p)) {
+    const [, , , id, , kind] = p.split('/');
+    const r = requests.get(id ?? '');
+    if (!r) throw notFound();
+    if (kind === 'claim' && !r.liability) {
+      throw Object.assign(
+        new Error('Пока нечего требовать: перерасчёт по этой заявке не насчитан'),
+        { code: 'conflict', status: 409 },
+      );
+    }
+    const exp = Date.now() + 30 * 60_000;
+    return {
+      url: `/api/requests/${id}/documents/${kind}.pdf?exp=${exp}&sig=mock`,
+      expiresAt: new Date(exp).toISOString(),
+    };
+  }
+
   if (/^\/api\/requests\/[^/]+\/documents\/(claim|gji)\.pdf$/.test(p)) {
     const r = requests.get(p.split('/')[3] ?? '');
     if (!r) throw notFound();
