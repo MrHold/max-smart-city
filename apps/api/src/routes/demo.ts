@@ -8,7 +8,12 @@ import { badRequest, notFound } from '../errors';
  * перемотка времени ломала бы расчёты и сроки, поэтому маршрутов просто нет.
  */
 export const demoRoutes =
-  (clock: DemoClock, authenticate: preHandlerAsyncHookHandler): FastifyPluginAsync =>
+  (
+    clock: DemoClock,
+    authenticate: preHandlerAsyncHookHandler,
+    /** Что сделать сразу после сдвига: например, закрыть заявки, забытые за это время. */
+    afterShift?: () => Promise<unknown>,
+  ): FastifyPluginAsync =>
   async (app) => {
     const state = (): DemoClockState => ({
       now: clock.now().toISOString(),
@@ -35,6 +40,10 @@ export const demoRoutes =
       if ('reset' in input) await clock.set(0);
       else if ('offsetMs' in input) await clock.set(input.offsetMs);
       else await clock.shift(Math.round(input.shiftHours * 3_600_000));
+
+      // Перемотка нужна ради демонстрации: без немедленной проверки автозакрытие
+      // сработало бы только на следующей минуте, и эффект не был бы виден.
+      await afterShift?.();
 
       return state();
     });

@@ -39,6 +39,7 @@ suite('демо-часы', () => {
   const { db, pool } = createDb(url as string);
   const clock = createDemoClock(db, { now: () => REAL_NOW }, 60_000);
   let app: ReturnType<typeof buildApp>;
+  let shifts = 0;
   let regions: Awaited<ReturnType<typeof loadRegionsData>>;
 
   const call = (method: 'GET' | 'POST', path: string, payload?: unknown) =>
@@ -76,7 +77,16 @@ suite('демо-часы', () => {
     await runMigrations(url as string);
     regions = await loadRegionsData();
     await seedFromRegions(db, regions);
-    app = buildApp({ data: regionsDataSource(regions), regions, db, auth, clock });
+    app = buildApp({
+      data: regionsDataSource(regions),
+      regions,
+      db,
+      auth,
+      clock,
+      afterClockShift: async () => {
+        shifts += 1;
+      },
+    });
     await app.ready();
   });
 
@@ -259,6 +269,15 @@ suite('демо-часы', () => {
       headers: { 'x-init-data': stranger },
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('после перемотки сразу запускается автозакрытие', async () => {
+    const before = shifts;
+    await call('POST', '/api/demo/clock', { shiftHours: 1 });
+    expect(shifts).toBe(before + 1);
+    // Обычное чтение времени проверку не запускает.
+    await call('GET', '/api/demo/clock');
+    expect(shifts).toBe(before + 1);
   });
 
   it('вне демо-режима маршрутов нет', async () => {

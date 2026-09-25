@@ -1,3 +1,4 @@
+export * from './autoclose';
 export * from './cluster';
 export * from './contracts';
 export * from './deadlines';
