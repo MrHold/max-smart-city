@@ -1,4 +1,4 @@
-import { demoClockLabel } from '@msc/domain';
+import { type DeleteMeResult, demoClockLabel, type MyData } from '@msc/domain';
 import type {
   Category,
   Home,
@@ -212,6 +212,29 @@ function locationText(l: NewRequestInput['location']): string {
   return parts.join(', ');
 }
 
+function mockPdf(title: string): string {
+  const safe = title.replace(/[()]/g, '');
+  const text = `BT /F1 18 Tf 40 780 Td (${safe}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${text.length} >>\nstream\n${text}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((o, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) out += `${String(off).padStart(10, '0')} 00000 n \n`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return out;
+}
+
 const delay = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 const notFound = () =>
   Object.assign(new Error('Заявка не найдена'), { code: 'not_found', status: 404 });
@@ -223,7 +246,7 @@ export async function mockApi(path: string, init: RequestInit): Promise<unknown>
   const method = init.method ?? 'GET';
   const body = typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : null;
 
-  if (p === '/api/me') return me;
+  if (p === '/api/me' && method === 'GET') return me;
 
   if (p === '/api/houses') {
     const q = (url.searchParams.get('q') ?? '').toLowerCase();
@@ -361,6 +384,63 @@ export async function mockApi(path: string, init: RequestInit): Promise<unknown>
       offsetMs: demoOffsetMs,
       label: demoClockLabel(demoOffsetMs),
     };
+  }
+
+  if (/^\/api\/requests\/[^/]+\/documents\/(claim|gji)\.pdf$/.test(p)) {
+    const r = requests.get(p.split('/')[3] ?? '');
+    if (!r) throw notFound();
+    if (p.endsWith('claim.pdf') && !r.liability) {
+      throw Object.assign(
+        new Error('Пока нечего требовать: перерасчёт по этой заявке не насчитан'),
+        { code: 'conflict', status: 409 },
+      );
+    }
+    return new Blob(
+      [mockPdf(p.endsWith('claim.pdf') ? 'Заявление о перерасчёте' : 'Обращение в ГЖИ')],
+      { type: 'application/pdf' },
+    );
+  }
+
+  if (p === '/api/me/data') {
+    const data: MyData = {
+      userId: me.user.id,
+      createdAt: hoursAgo(72),
+      items: [
+        {
+          label: 'Привязка к дому',
+          count: 1,
+          purpose: 'чтобы показывать контакты вашей УК и считать перерасчёт',
+          values: [`${me.house?.address ?? ''}, ${me.apartmentLabel ?? ''}`],
+        },
+        {
+          label: 'Заявки',
+          count: requests.size,
+          purpose: 'история проблем дома; после удаления остаются без вашего имени',
+        },
+        {
+          label: 'Присоединения к заявкам соседей',
+          count: 0,
+          purpose: 'чтобы УК видела масштаб проблемы',
+        },
+        {
+          label: 'Согласие на обработку данных',
+          count: 1,
+          purpose: 'основание хранить всё перечисленное',
+        },
+      ],
+      deletionNotice:
+        'Привязка к дому, присоединения и уведомления будут удалены. Ваши заявки останутся у дома, но без связи с вами: соседям они всё ещё нужны.',
+    };
+    return data;
+  }
+
+  if (p === '/api/me' && method === 'DELETE') {
+    const result: DeleteMeResult = {
+      deleted: { memberships: 1, consents: 1, joins: 0, notifications: 0 },
+      anonymizedRequests: requests.size,
+    };
+    me = { ...me, role: null, house: null, apartmentLabel: null, memberships: [] };
+    return result;
   }
 
   if (p === '/api/photos' && method === 'POST') return { key: `mock/${Date.now()}.jpg`, url: '' };

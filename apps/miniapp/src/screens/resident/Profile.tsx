@@ -32,6 +32,15 @@ export function Profile() {
           label="платформа"
         />
       </div>
+      <Card className="card__section">
+        <div className="eyebrow">Персональные данные</div>
+        <div className="muted">
+          Что хранится, зачем, и кнопка «Удалить всё» — без письма оператору.
+        </div>
+        <ButtonLink to="/profile/data" variant="secondary" size="sm">
+          Мои данные
+        </ButtonLink>
+      </Card>
       <Card>
         <DemoClockControl />
       </Card>

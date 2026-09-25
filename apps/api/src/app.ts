@@ -46,6 +46,7 @@ export function buildApp(opts: AppOptions) {
 
   app.register(cors, {
     origin: opts.corsOrigin ?? true,
+    methods: ['GET', 'HEAD', 'POST', 'DELETE'],
     allowedHeaders: ['Content-Type', 'X-Init-Data'],
   });
   app.register(multipart);
