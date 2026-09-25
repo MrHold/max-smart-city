@@ -1,0 +1,26 @@
+# Нормативы потребления отличаются от казанских: дома другой серии и климат мягче.
+region: '77'
+items:
+  - service: heating
+    unit: gcal_per_m2_month
+    value: 0.0164
+    dataKind: model
+    source:
+      title: Норматив потребления коммунальной услуги по отоплению
+      note: Значение модельное, подлежит замене официальным
+
+  - service: hot_water
+    unit: m3_per_person_month
+    value: 3.1
+    dataKind: model
+    source:
+      title: Норматив потребления коммунальной услуги по горячему водоснабжению
+      note: Значение модельное, подлежит замене официальным
+
+  - service: cold_water
+    unit: m3_per_person_month
+    value: 4.75
+    dataKind: model
+    source:
+      title: Норматив потребления коммунальной услуги по холодному водоснабжению
+      note: Значение модельное, подлежит замене официальным
