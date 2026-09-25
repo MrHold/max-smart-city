@@ -1,10 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { createDb, runMigrations, sql } from '@msc/db';
+import { createDb, parseEncKey, runMigrations, sql } from '@msc/db';
 import { DemoClockStateSchema, RequestDetailSchema } from '@msc/domain';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app';
 import type { AuthConfig } from '../auth/config';
-import { parseEncKey } from '../auth/identity';
 import { signInitData } from '../auth/init-data';
 import { createDemoClock } from '../clock/demo';
 import { loadRegionsData, regionsDataSource } from '../data/regions';

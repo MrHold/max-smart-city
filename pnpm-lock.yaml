@@ -215,6 +215,9 @@ importers:
       '@maxhub/max-bot-api':
         specifier: 0.3.1
         version: 0.3.1
+      '@msc/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@msc/domain':
         specifier: workspace:*
         version: link:../../packages/domain

@@ -1,10 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { createDb, eq, outbox, requests, runMigrations, sql } from '@msc/db';
+import { createDb, eq, outbox, parseEncKey, requests, runMigrations, sql } from '@msc/db';
 import { RequestDetailSchema } from '@msc/domain';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app';
 import type { AuthConfig } from '../auth/config';
-import { parseEncKey } from '../auth/identity';
 import { signInitData } from '../auth/init-data';
 import { loadRegionsData, regionsDataSource } from '../data/regions';
 import { seedFromRegions } from '../data/seed';

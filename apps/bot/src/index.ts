@@ -1,4 +1,6 @@
 import { Bot, Keyboard } from '@maxhub/max-bot-api';
+import { createDb, parseEncKey } from '@msc/db';
+import { startOutbox } from './outbox';
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -8,7 +10,15 @@ if (!token) {
 
 const bot = new Bot(token);
 
+// Имя и id бота нужны кнопке мини-приложения: MAX открывает приложение того бота, чьё имя указано
+const me = await bot.api.getMyInfo();
+if (!me.username) {
+  console.error('У бота нет публичного имени — кнопку мини-приложения не построить');
+  process.exit(1);
+}
+
 const menu = Keyboard.inlineKeyboard([
+  [Keyboard.button.openApp('Мой дом', me.username, me.user_id)],
   [Keyboard.button.callback('Контакты УК', 'home:contacts')],
   [Keyboard.button.link('Сайт хакатона', 'https://hackathon-max.vk.company')],
 ]);
@@ -32,7 +42,23 @@ bot.catch((err) => {
   console.error('Ошибка в обработчике:', err);
 });
 
-const me = await bot.api.getMyInfo();
+// Почтальон: рассылает уведомления, которые API кладёт в outbox
+const databaseUrl = process.env.DATABASE_URL;
+const encKeyBase64 = process.env.USER_ID_ENC_KEY;
+if (databaseUrl && encKeyBase64) {
+  const { db } = createDb(databaseUrl);
+  startOutbox({
+    bot,
+    db,
+    encKey: parseEncKey(encKeyBase64),
+    botUsername: me.username,
+    botId: me.user_id,
+  });
+  console.log('Уведомления из outbox включены');
+} else {
+  console.warn('Уведомления выключены: не заданы DATABASE_URL или USER_ID_ENC_KEY');
+}
+
 const mode = process.env.BOT_MODE ?? 'polling';
 
 if (mode === 'webhook') {
