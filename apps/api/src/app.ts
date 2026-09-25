@@ -12,6 +12,7 @@ import { ApiError } from './errors';
 import { bindRoutes } from './routes/bind';
 import { demoRoutes } from './routes/demo';
 import { dispatcherRoutes } from './routes/dispatcher';
+import { documentsRoutes } from './routes/documents';
 import { housesRoutes } from './routes/houses';
 import { meRoutes } from './routes/me';
 import { photosRoutes } from './routes/photos';
@@ -95,6 +96,7 @@ export function buildApp(opts: AppOptions) {
     if (opts.regions) {
       app.register(requestsRoutes(opts.db, opts.regions, clock, authenticate));
       app.register(dispatcherRoutes(opts.db, opts.regions, clock, authenticate));
+      app.register(documentsRoutes(opts.db, opts.regions, clock, authenticate));
     }
     if (isDemoClock(clock)) {
       app.register(demoRoutes(clock, authenticate));

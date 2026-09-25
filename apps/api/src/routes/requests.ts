@@ -20,13 +20,10 @@ import {
 import {
   type Clock,
   ConfirmInputSchema,
-  calcLiability,
-  checkQuality,
   dueAt as computeDueAt,
   escalation,
   isClosed,
   JoinInputSchema,
-  type Liability,
   type Location,
   type Measurement,
   NewRequestInputSchema,
@@ -41,6 +38,7 @@ import type { FastifyPluginAsync, preHandlerAsyncHookHandler } from 'fastify';
 import { getAuth } from '../auth/authenticate';
 import type { RegionsData } from '../data/regions';
 import { ApiError, badRequest, notFound } from '../errors';
+import { liabilityFor } from './liability-of';
 
 const forbidden = (message: string) => new ApiError(403, 'forbidden', message);
 const conflict = (message: string) => new ApiError(409, 'conflict', message);
@@ -109,77 +107,6 @@ function categoryOf(region: RegionPackage, code: string): RegionCategory {
   const category = region.categories.find((c) => c.code === code);
   if (!category) throw badRequest('Неизвестная категория');
   return category;
-}
-
-/**
- * Считает сумму снижения платы по заявке.
- *
- * Возвращает null там, где денег не бывает в принципе: ремонтные категории без норматива
- * качества, а также случаи, когда правило требует данных, которых у нас нет. Ошибку наружу
- * не пускаем: карточка заявки должна открыться в любом случае, просто без суммы.
- */
-function liabilityOf(
-  args: {
-    requestId: string;
-    category: RegionCategory;
-    region: RegionPackage;
-    rules: RegionsData['rules'];
-    tz: string;
-    startedAt: Date;
-    endedAt: Date | null;
-    plannedNotice: boolean | null;
-    accident: boolean;
-    measurements: Measurement[];
-    affectedApartments: number;
-    billing: Resident | null;
-  },
-  now: Date,
-): Liability | null {
-  const { category, rules } = args;
-  const service = category.service;
-  if (!service) return null;
-
-  const input = {
-    requestId: args.requestId,
-    service,
-    startedAt: args.startedAt,
-    endedAt: args.endedAt,
-    plannedNotice: args.plannedNotice,
-    accident: args.accident,
-    affectedApartments: args.affectedApartments,
-    billing: {
-      monthlyChargeKopecks: args.billing?.monthlyChargeKopecks ?? null,
-      apartmentAreaM2: args.billing?.areaM2 ?? null,
-      residents: args.billing?.residents ?? null,
-    },
-  };
-
-  try {
-    if (category.qualityRule) {
-      const rule = rules.quality.find((r) => r.id === category.qualityRule);
-      if (!rule) return null;
-      const verdict = checkQuality(args.measurements, rule, {
-        tz: args.tz,
-        until: args.endedAt ?? now,
-      });
-      return calcLiability(input, { quality: { rule, verdict } }, args.region, now);
-    }
-
-    if (category.interruptionRule) {
-      const rule = rules.interruption.find((r) => r.id === category.interruptionRule);
-      if (!rule) return null;
-      return calcLiability(
-        input,
-        { interruption: { rule, measurements: args.measurements } },
-        args.region,
-        now,
-      );
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
 }
 
 type RequestRow = typeof requests.$inferSelect;
@@ -277,7 +204,7 @@ async function buildDetail(
   // перерасчёт по чужой квартире.
   const measurements = measurementRows.filter((m) => m.joinerUserId === null).map(toMeasurement);
 
-  const liability = liabilityOf(
+  const liability = liabilityFor(
     {
       requestId: row.id,
       category,
@@ -290,7 +217,11 @@ async function buildDetail(
       accident: row.accident,
       measurements,
       affectedApartments: 1 + joinRows.length,
-      billing: authorBilling,
+      billing: {
+        monthlyChargeKopecks: authorBilling?.monthlyChargeKopecks ?? null,
+        apartmentAreaM2: authorBilling?.areaM2 ?? null,
+        residents: authorBilling?.residents ?? null,
+      },
     },
     now,
   );
@@ -345,7 +276,10 @@ async function buildDetail(
       viewer !== null &&
       viewer.houseId === row.houseId,
     shareUrl: shareUrlFor(row.id),
-    claim: { available: steps.claim.available, url: null },
+    claim: {
+      available: steps.claim.available,
+      url: steps.claim.available ? `/api/requests/${row.id}/documents/claim.pdf` : null,
+    },
     gji: steps.gji,
   };
 }

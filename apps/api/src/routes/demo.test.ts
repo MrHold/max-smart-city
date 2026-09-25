@@ -160,6 +160,49 @@ suite('демо-часы', () => {
     );
   });
 
+  it('документы появляются по мере появления оснований', async () => {
+    const created = await createRequest();
+
+    // Пока суммы нет, требовать нечего.
+    const early = await call('GET', `/api/requests/${created.id}/documents/claim.pdf`);
+    expect(early.statusCode).toBe(409);
+    // Жалобу в инспекцию до истечения срока ответа возвращают как преждевременную.
+    const earlyGji = await call('GET', `/api/requests/${created.id}/documents/gji.pdf`);
+    expect(earlyGji.statusCode).toBe(409);
+
+    await call('POST', '/api/demo/clock', { shiftHours: 6 });
+
+    const claim = await call('GET', `/api/requests/${created.id}/documents/claim.pdf`);
+    expect(claim.statusCode, claim.body.slice(0, 200)).toBe(200);
+    expect(claim.headers['content-type']).toContain('application/pdf');
+    expect(claim.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+
+    const gji = await call('GET', `/api/requests/${created.id}/documents/gji.pdf`);
+    expect(gji.statusCode).toBe(200);
+    expect(gji.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+
+  it('чужие документы не отдаются', async () => {
+    const created = await createRequest();
+    await call('POST', '/api/demo/clock', { shiftHours: 6 });
+
+    const stranger = signInitData(
+      {
+        auth_date: String(Math.floor(REAL_NOW.getTime() / 1000)),
+        query_id: 'demo-stranger',
+        user: JSON.stringify({ id: 7009, first_name: 'Чужой', language_code: 'ru' }),
+      },
+      BOT_TOKEN,
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/requests/${created.id}/documents/claim.pdf`,
+      headers: { 'x-init-data': stranger },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('вне демо-режима маршрутов нет', async () => {
     process.env.DEMO_MODE = '0';
     expect((await call('GET', '/api/demo/clock')).statusCode).toBe(404);
