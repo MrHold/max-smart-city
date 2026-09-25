@@ -1,18 +1,12 @@
 import type { Clock } from '@msc/domain';
 import { useSyncExternalStore } from 'react';
 
-const KEY = 'msc.demoClockOffsetMs';
+/**
+ * Сдвиг демо-часов приходит с сервера (GET /api/demo/clock) и хранится здесь,
+ * чтобы обратные отсчёты на экранах считались по тому же времени, что сроки и суммы в API.
+ */
 const listeners = new Set<() => void>();
-
-function readOffset(): number {
-  try {
-    return Number(localStorage.getItem(KEY) ?? 0) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-let offsetMs = readOffset();
+let offsetMs = 0;
 
 function emit() {
   for (const l of listeners) l();
@@ -22,16 +16,10 @@ export const demoClock: Clock = {
   now: () => new Date(Date.now() + offsetMs),
 };
 
-export function setDemoOffset(ms: number) {
+export function applyDemoOffset(ms: number) {
+  if (ms === offsetMs) return;
   offsetMs = ms;
-  try {
-    localStorage.setItem(KEY, String(ms));
-  } catch {}
   emit();
-}
-
-export function shiftDemoClock(deltaMs: number) {
-  setDemoOffset(offsetMs + deltaMs);
 }
 
 export function useDemoOffset(): number {

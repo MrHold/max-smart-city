@@ -1,3 +1,4 @@
+import { demoClockLabel } from '@msc/domain';
 import type {
   Category,
   Home,
@@ -120,6 +121,7 @@ const iso = (d: Date) => d.toISOString();
 const hoursAgo = (h: number) => iso(new Date(Date.now() - h * 3_600_000));
 const hoursAhead = (h: number) => iso(new Date(Date.now() + h * 3_600_000));
 
+let demoOffsetMs = 0;
 const requests = new Map<string, RequestDetail>();
 let seq = 143;
 
@@ -344,6 +346,21 @@ export async function mockApi(path: string, init: RequestInit): Promise<unknown>
       });
       return r;
     }
+  }
+
+  if (p === '/api/demo/clock') {
+    if (method === 'POST') {
+      const b = body as { shiftHours?: number; offsetMs?: number; reset?: true };
+      if (b.reset) demoOffsetMs = 0;
+      else if (typeof b.offsetMs === 'number') demoOffsetMs = b.offsetMs;
+      else if (typeof b.shiftHours === 'number')
+        demoOffsetMs += Math.round(b.shiftHours * 3_600_000);
+    }
+    return {
+      now: new Date(Date.now() + demoOffsetMs).toISOString(),
+      offsetMs: demoOffsetMs,
+      label: demoClockLabel(demoOffsetMs),
+    };
   }
 
   if (p === '/api/photos' && method === 'POST') return { key: `mock/${Date.now()}.jpg`, url: '' };

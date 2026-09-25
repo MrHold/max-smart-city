@@ -5,7 +5,7 @@ import type { Liability, RequestDetail } from '../../api/types';
 import { ensureWebApp } from '../../bridge';
 import { demoClock, useDemoOffset } from '../../clock';
 import { fmtDate, fmtDateTime, fmtDuration, initials, plural } from '../../lib/format';
-import { buildTimeline, statusLabel, statusTone } from '../../lib/request';
+import { buildTimeline, closedStatuses, statusLabel, statusTone } from '../../lib/request';
 import {
   Button,
   Card,
@@ -24,6 +24,11 @@ function Deadline({ r }: { r: RequestDetail }) {
   useDemoOffset();
   const left = new Date(r.dueAt).getTime() - demoClock.now().getTime();
   const overdue = r.overdue || left < 0;
+  if (closedStatuses.includes(r.status)) {
+    return overdue ? (
+      <span className="status-line status-line--muted">закрыта с просрочкой</span>
+    ) : null;
+  }
   return (
     <span className={`status-line ${overdue ? 'status-line--danger' : 'status-line--muted'}`}>
       <IconClock size={14} />
@@ -88,30 +93,38 @@ function ShareBlock({ r }: { r: RequestDetail }) {
   );
 }
 
-function LiabilityBlock({ l }: { l: Liability }) {
+function LiabilityBlock({ l, closed }: { l: Liability; closed: boolean }) {
+  const hours = Math.round(l.hours * 10) / 10;
+  const counting = l.thresholdReachedAt !== null && l.apartmentKopecks > 0;
   return (
     <Card className="card__section">
       <div className="row row--between">
         <div className="eyebrow">Перерасчёт</div>
         <ProvenanceChip value={l.steps.some((s) => s.provenance === 'model') ? 'model' : 'calc'} />
       </div>
-      <div>
-        <Money kopecks={l.apartmentKopecks} />
-        <div className="muted">
-          вам положено за {l.hours} {plural(Math.round(l.hours), 'час', 'часа', 'часов')} нарушения
-        </div>
-      </div>
-      <div className="stats">
-        <Stat small value={formatRub(l.houseKopecks)} label="по всем квартирам заявки" />
-        <Stat
-          small
-          value={`+${formatRub(l.perHourHouseKopecks)} / ч`}
-          label="растёт, пока не устранят"
-        />
-      </div>
-      {l.thresholdReachedAt === null && (
+      {counting ? (
+        <>
+          <div>
+            <Money kopecks={l.apartmentKopecks} />
+            <div className="muted">
+              вам положено за {hours.toLocaleString('ru-RU')}{' '}
+              {plural(Math.round(hours), 'час', 'часа', 'часов')} нарушения
+            </div>
+          </div>
+          <div className="stats">
+            <Stat small value={formatRub(l.houseKopecks)} label="по всем квартирам заявки" />
+            <Stat
+              small
+              value={`+${formatRub(l.perHourHouseKopecks)} / ч`}
+              label={closed ? 'набегало, пока не устранили' : 'растёт, пока не устранят'}
+            />
+          </div>
+        </>
+      ) : (
         <div className="banner banner--accent">
-          Допустимый перерыв ещё не превышен — перерасчёт начнётся после порога по ПП 354.
+          {l.thresholdReachedAt === null
+            ? 'Допустимый перерыв ещё не превышен — перерасчёт начнётся после порога по ПП 354.'
+            : 'Сумма появится, как только нарушение продлится дольше допустимого.'}
         </div>
       )}
       <details>
@@ -168,7 +181,7 @@ export function RequestCard() {
         </div>
       </div>
 
-      {r.liability && <LiabilityBlock l={r.liability} />}
+      {r.liability && <LiabilityBlock l={r.liability} closed={closedStatuses.includes(r.status)} />}
       {r.isAuthor && r.kind !== 'emergency' && <ShareBlock r={r} />}
 
       {r.executor && (

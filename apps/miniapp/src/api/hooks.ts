@@ -1,4 +1,6 @@
+import type { DemoClockInput, DemoClockState } from '@msc/domain';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { applyDemoOffset, isDemoMode } from '../clock';
 import { api, json } from './client';
 import type {
   Category,
@@ -18,6 +20,7 @@ export const keys = {
   houses: (q: string) => ['houses', q] as const,
   requests: ['requests'] as const,
   request: (id: string) => ['request', id] as const,
+  demoClock: ['demoClock'] as const,
 };
 
 export function useMe() {
@@ -112,6 +115,30 @@ export function useUploadPhoto() {
       const form = new FormData();
       form.append('file', file);
       return api<{ key: string; url: string }>('/api/photos', { method: 'POST', body: form });
+    },
+  });
+}
+
+export function useDemoClock() {
+  return useQuery({
+    queryKey: keys.demoClock,
+    queryFn: () => api<DemoClockState>('/api/demo/clock'),
+    enabled: isDemoMode,
+    refetchInterval: 30_000,
+    retry: false,
+  });
+}
+
+/** После перемотки сроки и суммы на сервере другие — перечитываем всё, что от времени зависит. */
+export function useShiftDemoClock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DemoClockInput) => api<DemoClockState>('/api/demo/clock', json(input)),
+    onSuccess: (state) => {
+      qc.setQueryData(keys.demoClock, state);
+      applyDemoOffset(state.offsetMs);
+      void qc.invalidateQueries({ queryKey: keys.requests });
+      void qc.invalidateQueries({ queryKey: ['request'] });
     },
   });
 }
