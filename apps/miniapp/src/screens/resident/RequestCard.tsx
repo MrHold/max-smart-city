@@ -261,8 +261,10 @@ export function RequestCard() {
               loading={doc.isPending && doc.variables?.filename.startsWith('claim')}
               onClick={() =>
                 doc.mutate({
-                  path: r.claim.url ?? `/api/requests/${r.id}/documents/claim.pdf`,
-                  filename: `claim-${r.number}.pdf`,
+                  requestId: r.id,
+                  kind: 'claim',
+                  filename: `zayavlenie-${r.number}.pdf`,
+                  signedUrl: r.claim.url,
                 })
               }
             >
@@ -275,7 +277,8 @@ export function RequestCard() {
               loading={doc.isPending && doc.variables?.filename.startsWith('gji')}
               onClick={() =>
                 doc.mutate({
-                  path: `/api/requests/${r.id}/documents/gji.pdf`,
+                  requestId: r.id,
+                  kind: 'gji',
                   filename: `gji-${r.number}.pdf`,
                 })
               }

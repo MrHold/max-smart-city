@@ -51,6 +51,10 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+/** Полный адрес для передачи наружу (в клиент MAX): относительный путь API там не поймут. */
+export const absoluteApiUrl = (path: string): string =>
+  new URL(path, base || window.location.origin).toString();
+
 export const json = (data: unknown, method = 'POST'): RequestInit => ({
   method,
   body: JSON.stringify(data),

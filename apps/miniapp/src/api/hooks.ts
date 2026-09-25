@@ -1,16 +1,27 @@
 import type { DeleteMeResult, DemoClockInput, DemoClockState, MyData } from '@msc/domain';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ensureWebApp, getPlatform } from '../bridge';
 import { applyDemoOffset, isDemoMode } from '../clock';
-import { api, apiBlob, json, openBlob } from './client';
+import { absoluteApiUrl, api, apiBlob, json, openBlob } from './client';
 import type {
+  AcceptInput,
+  AssignInput,
+  BulkResult,
   Category,
+  CompleteInput,
+  DispatcherInbox,
+  DocumentLink,
+  Executor,
+  ExecutorInvite,
   Home,
   HouseSearchItem,
   JoinInput,
   Me,
   NewRequestInput,
+  RejectInput,
   RequestDetail,
   RequestSummary,
+  Role,
 } from './types';
 
 export const keys = {
@@ -22,6 +33,8 @@ export const keys = {
   request: (id: string) => ['request', id] as const,
   demoClock: ['demoClock'] as const,
   myData: ['myData'] as const,
+  dispatcherInbox: ['dispatcher', 'inbox'] as const,
+  executors: ['dispatcher', 'executors'] as const,
 };
 
 export function useMe() {
@@ -144,11 +157,37 @@ export function useShiftDemoClock() {
   });
 }
 
+export type DocumentKind = 'claim' | 'gji';
+
+interface OpenDocumentInput {
+  requestId: string;
+  kind: DocumentKind;
+  filename: string;
+  /** Подписанная ссылка из карточки, если сервер её уже выдал: тогда лишнего запроса не будет. */
+  signedUrl?: string | null;
+}
+
+/**
+ * MAX Bridge не скачивает файлы по href и blob-ссылкам — только через downloadFile по https,
+ * без заголовков. Поэтому внутри MAX берём подписанную ссылку и отдаём её клиенту;
+ * в обычном браузере качаем сами с заголовком входа.
+ */
 export function useOpenDocument() {
   return useMutation({
-    mutationFn: async ({ path, filename }: { path: string; filename: string }) => {
-      const blob = await apiBlob(path);
-      openBlob(blob, filename);
+    mutationFn: async ({ requestId, kind, filename, signedUrl }: OpenDocumentInput) => {
+      const wa = ensureWebApp();
+      if (typeof wa.downloadFile !== 'function') {
+        const blob = await apiBlob(`/api/requests/${requestId}/documents/${kind}.pdf`);
+        openBlob(blob, filename);
+        return;
+      }
+      const path =
+        signedUrl ??
+        (await api<DocumentLink>(`/api/requests/${requestId}/documents/${kind}/link`, json({})))
+          .url;
+      const url = absoluteApiUrl(path);
+      if (getPlatform() === 'web' && wa.openLink) wa.openLink(url);
+      else await wa.downloadFile?.(url, filename);
     },
   });
 }
@@ -163,5 +202,58 @@ export function useDeleteMe() {
   return useMutation({
     mutationFn: () => api<DeleteMeResult>('/api/me', { method: 'DELETE' }),
     onSuccess: () => qc.clear(),
+  });
+}
+
+export function useDispatcherInbox(enabled = true) {
+  return useQuery({
+    queryKey: keys.dispatcherInbox,
+    queryFn: () => api<DispatcherInbox>('/api/dispatcher/inbox'),
+    enabled,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useExecutors() {
+  return useQuery({
+    queryKey: keys.executors,
+    queryFn: () => api<Executor[]>('/api/dispatcher/executors'),
+  });
+}
+
+export function useExecutorInvite() {
+  return useMutation({
+    mutationFn: (executorId: string) =>
+      api<ExecutorInvite>(`/api/dispatcher/executors/${executorId}/invite`),
+  });
+}
+
+export type DispatcherAction =
+  | { action: 'accept'; body: AcceptInput }
+  | { action: 'reject'; body: RejectInput }
+  | { action: 'assign'; body: AssignInput }
+  | { action: 'complete'; body: CompleteInput };
+
+/** Массовое действие над кластером: после него меняются и входящие, и карточки жителей. */
+export function useDispatcherAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, body }: DispatcherAction) =>
+      api<BulkResult>(`/api/dispatcher/${action}`, json(body)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.dispatcherInbox });
+      void qc.invalidateQueries({ queryKey: keys.requests });
+      void qc.invalidateQueries({ queryKey: ['request'] });
+    },
+  });
+}
+
+/** Демо-режим: жюри проходит сценарий одним аккаунтом, вторым человеком быть некому. */
+export function useBecomeDispatcher() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<{ role: Role; orgId: string; orgName: string }>('/api/demo/dispatcher', json({})),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.me }),
   });
 }

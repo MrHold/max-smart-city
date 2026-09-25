@@ -52,6 +52,8 @@ export const router = createBrowserRouter([
       { path: '/requests/new', element: <NewRequest /> },
       { path: '/join/:id', element: <JoinRequest /> },
       { path: '/dispatcher', element: <DispatcherInbox /> },
+      { path: '/dispatcher/executors', element: <DispatcherInbox /> },
+      { path: '/dispatcher/c/:key', element: <DispatcherInbox /> },
     ],
   },
 ]);
