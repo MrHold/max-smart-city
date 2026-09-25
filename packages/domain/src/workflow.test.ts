@@ -20,6 +20,18 @@ describe('переходы', () => {
     expect(transition(reopened, 'complete')).toBe('done');
   });
 
+  it('исполнитель может отказаться — заявка возвращается диспетчеру', () => {
+    expect(transition('assigned', 'decline')).toBe('accepted');
+    expect(transition('in_progress', 'decline')).toBe('accepted');
+    // После отказа диспетчер назначает другого.
+    expect(transition('accepted', 'assign')).toBe('assigned');
+  });
+
+  it('отказаться можно только от назначенной работы', () => {
+    expect(canTransition('new', 'decline')).toBe(false);
+    expect(canTransition('done', 'decline')).toBe(false);
+  });
+
   it('закрытую заявку не трогаем', () => {
     expect(() => transition('confirmed', 'reopen')).toThrow(TransitionError);
     expect(() => transition('rejected', 'assign')).toThrow(TransitionError);

@@ -6,6 +6,8 @@ import {
   desc,
   enqueueNotification,
   eq,
+  executors as executorsTable,
+  gte,
   houses,
   inArray,
   joins,
@@ -19,13 +21,10 @@ import {
 import {
   type Clock,
   ConfirmInputSchema,
-  calcLiability,
-  checkQuality,
   dueAt as computeDueAt,
   escalation,
   isClosed,
   JoinInputSchema,
-  type Liability,
   type Location,
   type Measurement,
   NewRequestInputSchema,
@@ -40,9 +39,13 @@ import type { FastifyPluginAsync, preHandlerAsyncHookHandler } from 'fastify';
 import { getAuth } from '../auth/authenticate';
 import type { RegionsData } from '../data/regions';
 import { ApiError, badRequest, notFound } from '../errors';
+import { liabilityFor } from './liability-of';
 
 const forbidden = (message: string) => new ApiError(403, 'forbidden', message);
 const conflict = (message: string) => new ApiError(409, 'conflict', message);
+
+/** Окно, в котором повторная заявка той же категории считается случайным дублем. */
+const DUPLICATE_WINDOW_MS = Number(process.env.DUPLICATE_WINDOW_MIN ?? 10) * 60_000;
 
 const eventLabels: Record<string, string> = {
   created: 'Заявка отправлена',
@@ -110,77 +113,6 @@ function categoryOf(region: RegionPackage, code: string): RegionCategory {
   return category;
 }
 
-/**
- * Считает сумму снижения платы по заявке.
- *
- * Возвращает null там, где денег не бывает в принципе: ремонтные категории без норматива
- * качества, а также случаи, когда правило требует данных, которых у нас нет. Ошибку наружу
- * не пускаем: карточка заявки должна открыться в любом случае, просто без суммы.
- */
-function liabilityOf(
-  args: {
-    requestId: string;
-    category: RegionCategory;
-    region: RegionPackage;
-    rules: RegionsData['rules'];
-    tz: string;
-    startedAt: Date;
-    endedAt: Date | null;
-    plannedNotice: boolean | null;
-    accident: boolean;
-    measurements: Measurement[];
-    affectedApartments: number;
-    billing: Resident | null;
-  },
-  now: Date,
-): Liability | null {
-  const { category, rules } = args;
-  const service = category.service;
-  if (!service) return null;
-
-  const input = {
-    requestId: args.requestId,
-    service,
-    startedAt: args.startedAt,
-    endedAt: args.endedAt,
-    plannedNotice: args.plannedNotice,
-    accident: args.accident,
-    affectedApartments: args.affectedApartments,
-    billing: {
-      monthlyChargeKopecks: args.billing?.monthlyChargeKopecks ?? null,
-      apartmentAreaM2: args.billing?.areaM2 ?? null,
-      residents: args.billing?.residents ?? null,
-    },
-  };
-
-  try {
-    if (category.qualityRule) {
-      const rule = rules.quality.find((r) => r.id === category.qualityRule);
-      if (!rule) return null;
-      const verdict = checkQuality(args.measurements, rule, {
-        tz: args.tz,
-        until: args.endedAt ?? now,
-      });
-      return calcLiability(input, { quality: { rule, verdict } }, args.region, now);
-    }
-
-    if (category.interruptionRule) {
-      const rule = rules.interruption.find((r) => r.id === category.interruptionRule);
-      if (!rule) return null;
-      return calcLiability(
-        input,
-        { interruption: { rule, measurements: args.measurements } },
-        args.region,
-        now,
-      );
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 type RequestRow = typeof requests.$inferSelect;
 
 const toMeasurement = (row: typeof measurementsTable.$inferSelect): Measurement => ({
@@ -194,6 +126,47 @@ const shareUrlFor = (id: string): string => {
   const link = process.env.APP_LINK;
   return link ? `${link}?startapp=r_${id}` : '';
 };
+
+/** Когда исполнитель обещал прийти: «26 сентября, 14:00» по местному времени дома. */
+function formatSlot(plannedAt: string, tz: string): string {
+  return new Intl.DateTimeFormat('ru-RU', {
+    timeZone: tz,
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(plannedAt));
+}
+
+/**
+ * Кто придёт и когда. Имя берётся из справочника исполнителей, время визита —
+ * из события назначения: отдельной колонки для него нет, а история заявки неизменна.
+ * Телефон не отдаём: жителю нужно знать время, а не личный номер работника.
+ */
+async function executorCard(
+  db: DbOrTx,
+  row: RequestRow,
+  eventRows: Array<typeof requestEvents.$inferSelect>,
+  tz: string,
+): Promise<RequestDetail['executor']> {
+  if (!row.executorId) return null;
+
+  const [found] = await db
+    .select({ nameShort: executorsTable.nameShort })
+    .from(executorsTable)
+    .where(eq(executorsTable.id, row.executorId))
+    .limit(1);
+  if (!found) return null;
+
+  const assigned = [...eventRows].reverse().find((e) => e.type === 'assigned');
+  const plannedAt = (assigned?.payload as { plannedAt?: string | null } | null)?.plannedAt ?? null;
+
+  return {
+    nameShort: found.nameShort,
+    slot: plannedAt ? formatSlot(plannedAt, tz) : null,
+    phone: null,
+  };
+}
 
 async function buildDetail(
   db: DbOrTx,
@@ -227,13 +200,15 @@ async function buildDetail(
     db.select().from(photos).where(eq(photos.requestId, row.id)).orderBy(asc(photos.at)),
   ]);
 
+  const executor = await executorCard(db, row, eventRows, house.tz);
+
   const authorBilling = await resident(db, row.authorUserId);
   // Снижение платы автору считается по его собственным замерам. Замеры соседей
   // подтверждают масштаб и нужны для акта, но чужой градусник не увеличивает
   // перерасчёт по чужой квартире.
   const measurements = measurementRows.filter((m) => m.joinerUserId === null).map(toMeasurement);
 
-  const liability = liabilityOf(
+  const liability = liabilityFor(
     {
       requestId: row.id,
       category,
@@ -246,7 +221,11 @@ async function buildDetail(
       accident: row.accident,
       measurements,
       affectedApartments: 1 + joinRows.length,
-      billing: authorBilling,
+      billing: {
+        monthlyChargeKopecks: authorBilling?.monthlyChargeKopecks ?? null,
+        apartmentAreaM2: authorBilling?.areaM2 ?? null,
+        residents: authorBilling?.residents ?? null,
+      },
     },
     now,
   );
@@ -292,7 +271,7 @@ async function buildDetail(
       joinedAt: j.joinedAt.toISOString(),
     })),
     liability,
-    executor: null,
+    executor,
     isAuthor,
     canJoin:
       !isAuthor &&
@@ -301,7 +280,10 @@ async function buildDetail(
       viewer !== null &&
       viewer.houseId === row.houseId,
     shareUrl: shareUrlFor(row.id),
-    claim: { available: steps.claim.available, url: null },
+    claim: {
+      available: steps.claim.available,
+      url: steps.claim.available ? `/api/requests/${row.id}/documents/claim.pdf` : null,
+    },
     gji: steps.gji,
   };
 }
@@ -435,6 +417,27 @@ export const requestsRoutes =
         tz: house.tz,
       });
 
+      // Двойное нажатие «Отправить» и повтор после обрыва связи не должны плодить
+      // одинаковые заявки: для диспетчера это дубли в кластере, для жителя — путаница.
+      // Повтором считаем ту же категорию того же автора за последние DUPLICATE_WINDOW_MIN минут.
+      const [duplicate] = await db
+        .select({ id: requests.id })
+        .from(requests)
+        .where(
+          and(
+            eq(requests.authorUserId, userId),
+            eq(requests.category, category.code),
+            gte(requests.createdAt, new Date(now.getTime() - DUPLICATE_WINDOW_MS)),
+          ),
+        )
+        .limit(1);
+
+      if (duplicate) {
+        // Возвращаем уже созданную заявку, а не ошибку: для пользователя повтор
+        // должен выглядеть как успех, иначе он нажмёт ещё раз.
+        return buildDetail(db, data, await loadRequest(duplicate.id), userId, now);
+      }
+
       const id = await db.transaction(async (tx) => {
         const number = await nextRequestNumber(tx, now.getUTCFullYear());
         const [created] = await tx
@@ -452,6 +455,10 @@ export const requestsRoutes =
             plannedNotice: input.plannedNotice,
             status: demoMode ? 'accepted' : 'new',
             dueAt: due,
+            // Время берём из часов приложения, а не из базы: в демо-режиме они сдвинуты,
+            // и иначе заявка оказалась бы «созданной» в прошлом относительно своих сроков.
+            createdAt: now,
+            updatedAt: now,
           })
           .returning({ id: requests.id });
         if (!created) throw new ApiError(500, 'internal', 'Не удалось создать заявку');
@@ -480,11 +487,14 @@ export const requestsRoutes =
           type: 'created',
           actorUserId: userId,
           payload: { number },
+          at: now,
         });
         // В демо-режиме диспетчера нет, поэтому заявка принимается сама:
         // иначе основной сценарий не пройти без второго аккаунта.
         if (demoMode) {
-          await tx.insert(requestEvents).values({ requestId: created.id, type: 'accepted' });
+          await tx
+            .insert(requestEvents)
+            .values({ requestId: created.id, type: 'accepted', at: now });
         }
 
         return created.id;
@@ -537,6 +547,7 @@ export const requestsRoutes =
           requestId: id,
           userId,
           apartmentLabel: parsed.data.apartmentLabel,
+          joinedAt: now,
         });
 
         if (parsed.data.measurements.length) {
@@ -558,6 +569,7 @@ export const requestsRoutes =
           actorUserId: userId,
           // Номер квартиры соседа виден: без него акт не составить. Имя не показываем.
           payload: { apartmentLabel: parsed.data.apartmentLabel },
+          at: now,
         });
 
         await enqueueNotification(tx, row.authorUserId, {
@@ -639,6 +651,7 @@ export const requestsRoutes =
           type: accepted ? 'confirmed' : 'reopened',
           actorUserId: userId,
           payload: parsed.data.note ? { note: parsed.data.note } : {},
+          at: now,
         });
       });
 

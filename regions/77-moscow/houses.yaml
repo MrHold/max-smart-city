@@ -1,0 +1,17 @@
+region: '77'
+items:
+  - id: house-77-msk-001
+    address: Москва, ул. Профсоюзная, 100
+    fiasId: '00000000-0000-0000-0000-000000770001'
+    orgId: org-77-prof
+    entrances: 8
+    floors: 17
+    dataKind: model
+
+  - id: house-77-msk-002
+    address: Москва, Ленинский проспект, 45
+    fiasId: '00000000-0000-0000-0000-000000770002'
+    orgId: org-77-prof
+    entrances: 5
+    floors: 12
+    dataKind: model

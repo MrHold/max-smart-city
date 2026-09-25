@@ -3,7 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@msc/domain": "workspace:*",
+    "pdfmake": "0.3.11"
+  },
+  "devDependencies": {
+    "@types/pdfmake": "0.3.3",
+    "vitest": "5.0.1"
   }
 }

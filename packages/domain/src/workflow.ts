@@ -7,14 +7,16 @@ export type WorkflowEvent =
   | 'assign'
   | 'start'
   | 'complete'
+  | 'decline'
   | 'confirm'
   | 'reopen';
 
 const TRANSITIONS: Record<RequestStatus, Partial<Record<WorkflowEvent, RequestStatus>>> = {
   new: { accept: 'accepted', reject: 'rejected' },
   accepted: { assign: 'assigned', reject: 'rejected' },
-  assigned: { start: 'in_progress', complete: 'done', assign: 'assigned' },
-  in_progress: { complete: 'done' },
+  // decline — «не могу взять»: заявка возвращается диспетчеру, чтобы он назначил другого.
+  assigned: { start: 'in_progress', complete: 'done', assign: 'assigned', decline: 'accepted' },
+  in_progress: { complete: 'done', decline: 'accepted' },
   done: { confirm: 'confirmed', reopen: 'reopened' },
   reopened: { assign: 'assigned', start: 'in_progress', complete: 'done' },
   confirmed: {},

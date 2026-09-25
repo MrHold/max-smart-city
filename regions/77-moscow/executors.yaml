@@ -1,0 +1,19 @@
+region: '77'
+items:
+  - id: exe-77-prof-santeh
+    orgId: org-77-prof
+    nameShort: Кузнецов А.
+    categories: [heating, heating_off, hot_water, hot_water_off, cold_water_off]
+    dataKind: model
+
+  - id: exe-77-prof-elektrik
+    orgId: org-77-prof
+    nameShort: Орлова М.
+    categories: [entrance_light, yard_lighting, elevator]
+    dataKind: model
+
+  - id: exe-77-prof-dvor
+    orgId: org-77-prof
+    nameShort: Белов Д.
+    categories: [yard_cleaning, entrance_door, garbage_chute]
+    dataKind: model

@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
 import type { Db } from '@msc/db';
 import { type Clock, systemClock } from '@msc/domain';
 import Fastify from 'fastify';
@@ -12,9 +13,11 @@ import { ApiError } from './errors';
 import { bindRoutes } from './routes/bind';
 import { demoRoutes } from './routes/demo';
 import { dispatcherRoutes } from './routes/dispatcher';
+import { documentsRoutes } from './routes/documents';
 import { housesRoutes } from './routes/houses';
 import { meRoutes } from './routes/me';
 import { photosRoutes } from './routes/photos';
+import { privacyRoutes } from './routes/privacy';
 import { requestsRoutes } from './routes/requests';
 import type { Storage } from './storage';
 import { diskStorage } from './storage/disk';
@@ -46,6 +49,19 @@ export function buildApp(opts: AppOptions) {
     allowedHeaders: ['Content-Type', 'X-Init-Data'],
   });
   app.register(multipart);
+
+  // Ограничение частоты: один вошедший пользователь не должен залить базу заявками
+  // или фотографиями. Считаем по пользователю, а не по адресу — за одним домашним
+  // роутером могут сидеть несколько жителей.
+  app.register(rateLimit, {
+    global: true,
+    max: Number(process.env.RATE_LIMIT_MAX ?? 120),
+    timeWindow: '1 minute',
+    keyGenerator: (req) => req.auth?.userId ?? req.ip,
+    errorResponseBuilder: () => ({
+      error: { code: 'too_many_requests', message: 'Слишком много запросов, подождите минуту' },
+    }),
+  });
 
   app.setErrorHandler((err: unknown, _req, reply) => {
     if (err instanceof ApiError) {
@@ -85,15 +101,18 @@ export function buildApp(opts: AppOptions) {
     photosRoutes(
       opts.storage ?? diskStorage(process.env.PHOTOS_DIR ?? './data/photos'),
       authenticate,
+      opts.db,
     ),
   );
 
   if (opts.db && authenticate) {
     app.register(meRoutes(opts.db, authenticate));
     app.register(bindRoutes(opts.db, authenticate));
+    app.register(privacyRoutes(opts.db, clock, authenticate));
     if (opts.regions) {
       app.register(requestsRoutes(opts.db, opts.regions, clock, authenticate));
       app.register(dispatcherRoutes(opts.db, opts.regions, clock, authenticate));
+      app.register(documentsRoutes(opts.db, opts.regions, clock, authenticate));
     }
     if (isDemoClock(clock)) {
       app.register(demoRoutes(clock, authenticate));

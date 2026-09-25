@@ -1,0 +1,75 @@
+# Набор категорий и сроки — региональная часть. Здесь они намеренно отличаются
+# от казанских: дверь и домофон чинят дольше, добавлен мусоропровод.
+# Коды коммунальных категорий совпадают: на них завязаны федеральные нормы.
+region: '77'
+items:
+  - code: heating
+    title: Холодные батареи
+    kind: utility_quality
+    service: heating
+    slaRule: ads.emergency
+    qualityRule: heating.indoor_temperature
+
+  - code: heating_off
+    title: Нет отопления
+    kind: utility_interruption
+    service: heating
+    slaRule: ads.emergency
+    interruptionRule: heating.interruption
+
+  - code: hot_water
+    title: Горячая вода холодная
+    kind: utility_quality
+    service: hot_water
+    slaRule: ads.emergency
+    qualityRule: hot_water.temperature
+
+  - code: hot_water_off
+    title: Нет горячей воды
+    kind: utility_interruption
+    service: hot_water
+    slaRule: ads.emergency
+    interruptionRule: hot_water.interruption
+
+  - code: cold_water_off
+    title: Нет холодной воды
+    kind: utility_interruption
+    service: cold_water
+    slaRule: ads.localization
+    interruptionRule: cold_water.interruption
+
+  - code: yard_lighting
+    title: Освещение во дворе
+    kind: repair
+    zone: yard
+    slaRule: repair.week
+
+  - code: yard_cleaning
+    title: Уборка, мусор
+    kind: repair
+    zone: yard
+    slaRule: repair.day
+
+  - code: entrance_light
+    title: Не горит свет
+    kind: repair
+    zone: entrance
+    slaRule: repair.day
+
+  - code: entrance_door
+    title: Дверь, домофон
+    kind: repair
+    zone: entrance
+    slaRule: repair.week
+
+  - code: elevator
+    title: Лифт
+    kind: repair
+    zone: entrance
+    slaRule: repair.day
+
+  - code: garbage_chute
+    title: Мусоропровод
+    kind: repair
+    zone: entrance
+    slaRule: repair.three_days

@@ -1,0 +1,38 @@
+region: '77'
+items:
+  - id: org-77-prof
+    type: uk
+    name: УК «Профсоюзная»
+    address: Москва, ул. Профсоюзная, 98
+    dataKind: model
+    contacts:
+      - kind: dispatcher
+        phone: '+7 495 000-11-22'
+        schedule:
+          days: [1, 2, 3, 4, 5, 6]
+          from: '08:00'
+          to: '21:00'
+      - kind: office
+        phone: '+7 495 000-33-44'
+        schedule:
+          days: [1, 2, 3, 4, 5]
+          from: '10:00'
+          to: '19:00'
+      - kind: emergency
+        phone: '+7 495 000-00-02'
+        schedule: null
+    announcement: null
+
+  - id: org-77-gji
+    type: gji
+    name: Мосжилинспекция
+    address: Москва
+    dataKind: model
+    contacts:
+      - kind: office
+        phone: '+7 495 000-99-00'
+        schedule:
+          days: [1, 2, 3, 4, 5]
+          from: '09:00'
+          to: '18:00'
+    announcement: null

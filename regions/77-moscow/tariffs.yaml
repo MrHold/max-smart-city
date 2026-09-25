@@ -1,0 +1,33 @@
+# Тарифы выше казанских — на этом и видно, что сумма перерасчёта зависит от региона,
+# а не зашита в код. Деньги в целых копейках.
+region: '77'
+items:
+  - service: heating
+    unit: gcal
+    valueKopecks: 312645
+    validFrom: '2026-07-01'
+    validTo: '2027-06-30'
+    dataKind: model
+    source:
+      title: Тариф на тепловую энергию для Москвы
+      note: Значение модельное, подлежит замене официальным
+
+  - service: hot_water
+    unit: m3
+    valueKopecks: 29810
+    validFrom: '2026-07-01'
+    validTo: '2027-06-30'
+    dataKind: model
+    source:
+      title: Тариф на горячее водоснабжение для Москвы
+      note: Значение модельное, подлежит замене официальным
+
+  - service: cold_water
+    unit: m3
+    valueKopecks: 5710
+    validFrom: '2026-07-01'
+    validTo: '2027-06-30'
+    dataKind: model
+    source:
+      title: Тариф на холодное водоснабжение для Москвы
+      note: Значение модельное, подлежит замене официальным
