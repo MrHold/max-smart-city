@@ -791,3 +791,42 @@ p {
   color: var(--danger-ink);
   pointer-events: none;
 }
+
+/* Кабинет диспетчера */
+.page.cab {
+  max-width: 1120px;
+}
+.cab__grid {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+.cab__grid--wide {
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 400px);
+}
+.cab__grid--wide .cab__panel {
+  position: sticky;
+  top: 12px;
+}
+.cluster-row--on {
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: #f2f8fa;
+}
+.exec-option {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #dde2de;
+  cursor: pointer;
+  font-size: 14px;
+}
+.exec-option--on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: #f2f8fa;
+}
+.exec-option input {
+  accent-color: var(--accent);
+}
