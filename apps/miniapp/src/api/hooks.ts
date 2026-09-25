@@ -1,7 +1,7 @@
-import type { DemoClockInput, DemoClockState } from '@msc/domain';
+import type { DeleteMeResult, DemoClockInput, DemoClockState, MyData } from '@msc/domain';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { applyDemoOffset, isDemoMode } from '../clock';
-import { api, json } from './client';
+import { api, apiBlob, json, openBlob } from './client';
 import type {
   Category,
   Home,
@@ -21,6 +21,7 @@ export const keys = {
   requests: ['requests'] as const,
   request: (id: string) => ['request', id] as const,
   demoClock: ['demoClock'] as const,
+  myData: ['myData'] as const,
 };
 
 export function useMe() {
@@ -140,5 +141,27 @@ export function useShiftDemoClock() {
       void qc.invalidateQueries({ queryKey: keys.requests });
       void qc.invalidateQueries({ queryKey: ['request'] });
     },
+  });
+}
+
+export function useOpenDocument() {
+  return useMutation({
+    mutationFn: async ({ path, filename }: { path: string; filename: string }) => {
+      const blob = await apiBlob(path);
+      openBlob(blob, filename);
+    },
+  });
+}
+
+export function useMyData() {
+  return useQuery({ queryKey: keys.myData, queryFn: () => api<MyData>('/api/me/data') });
+}
+
+/** Удаление всего, что сервис хранит о человеке. После него кэш пуст: пользователя больше нет. */
+export function useDeleteMe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<DeleteMeResult>('/api/me', { method: 'DELETE' }),
+    onSuccess: () => qc.clear(),
   });
 }
