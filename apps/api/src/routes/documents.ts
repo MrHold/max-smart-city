@@ -16,6 +16,7 @@ import type { FastifyPluginAsync, FastifyReply, preHandlerAsyncHookHandler } fro
 import { getAuth } from '../auth/authenticate';
 import type { RegionsData } from '../data/regions';
 import { ApiError, notFound } from '../errors';
+import { checkSignedLink, type DocumentKind, linkTtlMs, signedDocumentPath } from './doc-link';
 import { liabilityFor } from './liability-of';
 
 const forbidden = (message: string) => new ApiError(403, 'forbidden', message);
@@ -41,12 +42,24 @@ export const documentsRoutes =
     data: RegionsData,
     clock: Clock,
     authenticate: preHandlerAsyncHookHandler,
+    /** Секрет для подписи временных ссылок на документы. */
+    secret: string,
   ): FastifyPluginAsync =>
   async (app) => {
-    async function context(requestId: string, userId: string) {
+    /**
+     * Собирает данные для документа.
+     *
+     * `viewerUserId` = null означает вход по временной подписанной ссылке: право уже
+     * проверено в момент её выдачи. Данные заявителя всегда берутся по автору заявки,
+     * а не по тому, кто открыл документ.
+     */
+    async function context(requestId: string, viewerUserId: string | null) {
       const [row] = await db.select().from(requests).where(eq(requests.id, requestId)).limit(1);
       if (!row) throw notFound('Заявка');
-      if (row.authorUserId !== userId) throw forbidden('Документ доступен только автору заявки');
+      if (viewerUserId !== null && row.authorUserId !== viewerUserId) {
+        throw forbidden('Документ доступен только автору заявки');
+      }
+      const userId = row.authorUserId;
 
       const [house] = await db
         .select({
@@ -128,12 +141,39 @@ export const documentsRoutes =
         .header('content-disposition', `inline; filename="${name}"`)
         .send(pdf);
 
-    app.get(
-      '/api/requests/:id/documents/claim.pdf',
-      { preHandler: authenticate },
-      async (req, reply) => {
-        const { userId } = getAuth(req);
-        const { id } = req.params as { id: string };
+    /**
+     * Кто открыл документ. Либо вход через MAX, либо временная подписанная ссылка:
+     * по ней браузер приходит без заголовков, поэтому право проверено заранее,
+     * при её выдаче.
+     */
+    async function viewerOf(
+      req: Parameters<typeof authenticate>[0],
+      reply: FastifyReply,
+      kind: DocumentKind,
+    ) {
+      const { id } = req.params as { id: string };
+      const query = req.query as { exp?: string; sig?: string };
+
+      if (query.sig) {
+        const check = checkSignedLink(id, kind, query, clock.now(), secret);
+        if (!check.ok) {
+          throw forbidden(
+            check.reason === 'expired'
+              ? 'Ссылка на документ устарела — откройте его из заявки заново'
+              : 'Ссылка на документ недействительна',
+          );
+        }
+        return { id, userId: null as string | null };
+      }
+
+      // preHandler ожидает контекст приложения: вызываем его так же, как это делает Fastify.
+      await authenticate.call(app, req, reply);
+      return { id, userId: getAuth(req).userId };
+    }
+
+    app.get('/api/requests/:id/documents/claim.pdf', async (req, reply) => {
+      {
+        const { id, userId } = await viewerOf(req, reply, 'claim');
         const ctx = await context(id, userId);
 
         if (!ctx.liability || ctx.liability.apartmentKopecks <= 0) {
@@ -171,15 +211,12 @@ export const documentsRoutes =
         });
 
         return send(reply, `claim-${ctx.row.number}.pdf`, pdf);
-      },
-    );
+      }
+    });
 
-    app.get(
-      '/api/requests/:id/documents/gji.pdf',
-      { preHandler: authenticate },
-      async (req, reply) => {
-        const { userId } = getAuth(req);
-        const { id } = req.params as { id: string };
+    app.get('/api/requests/:id/documents/gji.pdf', async (req, reply) => {
+      {
+        const { id, userId } = await viewerOf(req, reply, 'gji');
         const ctx = await context(id, userId);
 
         const steps = escalation({
@@ -222,6 +259,47 @@ export const documentsRoutes =
         });
 
         return send(reply, `gji-${ctx.row.number}.pdf`, pdf);
+      }
+    });
+
+    /**
+     * Временная ссылка на документ. Мини-приложение открывает её обычным переходом,
+     * поэтому проверка права происходит здесь, а не при скачивании.
+     */
+    app.post(
+      '/api/requests/:id/documents/:kind/link',
+      { preHandler: authenticate },
+      async (req) => {
+        const { userId } = getAuth(req);
+        const { id, kind } = req.params as { id: string; kind: string };
+        if (kind !== 'claim' && kind !== 'gji') throw notFound('Документ');
+
+        const ctx = await context(id, userId);
+        const now = ctx.now;
+
+        if (kind === 'claim' && (!ctx.liability || ctx.liability.apartmentKopecks <= 0)) {
+          throw conflict('Пока нечего требовать: перерасчёт по этой заявке не насчитан');
+        }
+        if (kind === 'gji') {
+          const steps = escalation({
+            status: ctx.row.status as RequestStatus,
+            dueAt: ctx.row.dueAt,
+            now,
+            hasLiability: (ctx.liability?.apartmentKopecks ?? 0) > 0,
+          });
+          if (!steps.gji.available) {
+            throw conflict(
+              isClosed(ctx.row.status as RequestStatus)
+                ? 'Заявка закрыта — обращаться в инспекцию не нужно'
+                : 'Срок ответа управляющей организации ещё не истёк',
+            );
+          }
+        }
+
+        return {
+          url: signedDocumentPath(id, kind, now, secret),
+          expiresAt: new Date(now.getTime() + linkTtlMs).toISOString(),
+        };
       },
     );
   };

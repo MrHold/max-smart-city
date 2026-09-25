@@ -39,6 +39,7 @@ import type { FastifyPluginAsync, preHandlerAsyncHookHandler } from 'fastify';
 import { getAuth } from '../auth/authenticate';
 import type { RegionsData } from '../data/regions';
 import { ApiError, badRequest, notFound } from '../errors';
+import { signedDocumentPath } from './doc-link';
 import { liabilityFor } from './liability-of';
 
 const forbidden = (message: string) => new ApiError(403, 'forbidden', message);
@@ -174,6 +175,7 @@ async function buildDetail(
   row: RequestRow,
   viewerUserId: string,
   now: Date,
+  secret: string,
 ): Promise<RequestDetail> {
   const [house] = await db
     .select({ tz: houses.tz, regionCode: houses.regionCode })
@@ -282,7 +284,9 @@ async function buildDetail(
     shareUrl: shareUrlFor(row.id),
     claim: {
       available: steps.claim.available,
-      url: steps.claim.available ? `/api/requests/${row.id}/documents/claim.pdf` : null,
+      // Ссылка подписана и живёт ограниченное время: мини-приложение открывает её
+      // обычным переходом, а браузер не отправляет заголовок с данными входа.
+      url: steps.claim.available ? signedDocumentPath(row.id, 'claim', now, secret) : null,
     },
     gji: steps.gji,
   };
@@ -313,6 +317,8 @@ export const requestsRoutes =
     data: RegionsData,
     clock: Clock,
     authenticate: preHandlerAsyncHookHandler,
+    /** Секрет для подписи временной ссылки на документ в карточке. */
+    secret: string,
   ): FastifyPluginAsync =>
   async (app) => {
     const demoMode = process.env.DEMO_MODE === '1';
@@ -435,7 +441,7 @@ export const requestsRoutes =
       if (duplicate) {
         // Возвращаем уже созданную заявку, а не ошибку: для пользователя повтор
         // должен выглядеть как успех, иначе он нажмёт ещё раз.
-        return buildDetail(db, data, await loadRequest(duplicate.id), userId, now);
+        return buildDetail(db, data, await loadRequest(duplicate.id), userId, now, secret);
       }
 
       const id = await db.transaction(async (tx) => {
@@ -500,7 +506,7 @@ export const requestsRoutes =
         return created.id;
       });
 
-      return buildDetail(db, data, await loadRequest(id), userId, now);
+      return buildDetail(db, data, await loadRequest(id), userId, now, secret);
     });
 
     app.get('/api/requests/:id', { preHandler: authenticate }, async (req) => {
@@ -515,7 +521,7 @@ export const requestsRoutes =
         throw forbidden('Заявка другого дома');
       }
 
-      return buildDetail(db, data, row, userId, clock.now());
+      return buildDetail(db, data, row, userId, clock.now(), secret);
     });
 
     // «У меня тоже»: сосед подтверждает, что проблема касается и его квартиры.
@@ -580,7 +586,7 @@ export const requestsRoutes =
         });
       });
 
-      return buildDetail(db, data, await loadRequest(id), userId, now);
+      return buildDetail(db, data, await loadRequest(id), userId, now, secret);
     });
 
     // Приёмка работы жителем. Отказ возвращает заявку в работу и перезапускает срок.
@@ -655,6 +661,6 @@ export const requestsRoutes =
         });
       });
 
-      return buildDetail(db, data, await loadRequest(id), userId, now);
+      return buildDetail(db, data, await loadRequest(id), userId, now, secret);
     });
   };

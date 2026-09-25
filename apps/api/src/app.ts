@@ -105,14 +105,17 @@ export function buildApp(opts: AppOptions) {
     ),
   );
 
-  if (opts.db && authenticate) {
+  if (opts.db && authenticate && opts.auth) {
+    const secret = opts.auth.hashSecret;
     app.register(meRoutes(opts.db, authenticate));
     app.register(bindRoutes(opts.db, authenticate));
     app.register(privacyRoutes(opts.db, clock, authenticate));
     if (opts.regions) {
-      app.register(requestsRoutes(opts.db, opts.regions, clock, authenticate));
+      app.register(requestsRoutes(opts.db, opts.regions, clock, authenticate, secret));
       app.register(dispatcherRoutes(opts.db, opts.regions, clock, authenticate));
-      app.register(documentsRoutes(opts.db, opts.regions, clock, authenticate));
+      // Тем же секретом подписываются временные ссылки на документы: отдельная
+      // переменная окружения ради этого не нужна, ключ всё равно серверный.
+      app.register(documentsRoutes(opts.db, opts.regions, clock, authenticate, secret));
     }
     if (isDemoClock(clock)) {
       app.register(demoRoutes(clock, authenticate));
