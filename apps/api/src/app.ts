@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
 import type { Db } from '@msc/db';
 import { type Clock, systemClock } from '@msc/domain';
 import Fastify from 'fastify';
@@ -47,6 +48,19 @@ export function buildApp(opts: AppOptions) {
     allowedHeaders: ['Content-Type', 'X-Init-Data'],
   });
   app.register(multipart);
+
+  // Ограничение частоты: один вошедший пользователь не должен залить базу заявками
+  // или фотографиями. Считаем по пользователю, а не по адресу — за одним домашним
+  // роутером могут сидеть несколько жителей.
+  app.register(rateLimit, {
+    global: true,
+    max: Number(process.env.RATE_LIMIT_MAX ?? 120),
+    timeWindow: '1 minute',
+    keyGenerator: (req) => req.auth?.userId ?? req.ip,
+    errorResponseBuilder: () => ({
+      error: { code: 'too_many_requests', message: 'Слишком много запросов, подождите минуту' },
+    }),
+  });
 
   app.setErrorHandler((err: unknown, _req, reply) => {
     if (err instanceof ApiError) {

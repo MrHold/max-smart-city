@@ -168,6 +168,41 @@ suite('заявки', () => {
     expect(fetched.statusCode).toBe(200);
   });
 
+  it('двойное нажатие не создаёт вторую заявку', async () => {
+    const first = await createRequest();
+    const second = await createRequest();
+
+    // Повтор возвращает ту же заявку, а не ошибку: иначе человек нажмёт ещё раз.
+    expect(second.id).toBe(first.id);
+    expect(second.number).toBe(first.number);
+
+    const list = await call('GET', '/api/requests', AUTHOR);
+    expect(list.json()).toHaveLength(1);
+  });
+
+  it('заявка другой категории дублем не считается', async () => {
+    const heating = await createRequest();
+    const res = await call(
+      'POST',
+      '/api/requests',
+      AUTHOR,
+      newRequest({
+        category: 'entrance_light',
+        measurements: [],
+        location: { scope: 'entrance', entrance: 1 },
+      }),
+    );
+    const other = RequestDetailSchema.parse(res.json());
+    expect(other.id).not.toBe(heating.id);
+  });
+
+  it('заявка соседа дублем не считается', async () => {
+    const mine = await createRequest();
+    const res = await call('POST', '/api/requests', NEIGHBOUR, newRequest());
+    const theirs = RequestDetailSchema.parse(res.json());
+    expect(theirs.id).not.toBe(mine.id);
+  });
+
   it('не принимает дату начала из будущего', async () => {
     const res = await call('POST', '/api/requests', AUTHOR, {
       ...newRequest(),
@@ -331,12 +366,14 @@ suite('заявки', () => {
       expect(created.gji.available).toBe(true);
       expect(created.gji.afterAt).toBe(created.dueAt);
 
-      // Та же заявка, но начавшаяся только что: срок ещё не истёк.
+      // Свежая заявка: срок ещё не истёк. Категория другая, иначе сработает
+      // защита от дублей и вернётся первая заявка.
       const fresh = await call('POST', '/api/requests', AUTHOR, {
         ...newRequest({
+          category: 'hot_water',
           startedAt: NOW.toISOString(),
           measurements: [
-            { value: 15, unit: 'celsius', measuredAt: NOW.toISOString(), place: 'room' },
+            { value: 48, unit: 'celsius', measuredAt: NOW.toISOString(), place: 'tap' },
           ],
         }),
       });

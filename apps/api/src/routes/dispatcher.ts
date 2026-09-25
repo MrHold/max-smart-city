@@ -421,6 +421,7 @@ export const dispatcherRoutes =
             type: eventType,
             actorUserId: userId,
             payload: payload(row),
+            at: now,
           });
 
           if (notify) await enqueueNotification(tx, row.authorUserId, notify(row));

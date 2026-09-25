@@ -7,6 +7,7 @@ import {
   enqueueNotification,
   eq,
   executors as executorsTable,
+  gte,
   houses,
   inArray,
   joins,
@@ -42,6 +43,9 @@ import { liabilityFor } from './liability-of';
 
 const forbidden = (message: string) => new ApiError(403, 'forbidden', message);
 const conflict = (message: string) => new ApiError(409, 'conflict', message);
+
+/** Окно, в котором повторная заявка той же категории считается случайным дублем. */
+const DUPLICATE_WINDOW_MS = Number(process.env.DUPLICATE_WINDOW_MIN ?? 10) * 60_000;
 
 const eventLabels: Record<string, string> = {
   created: 'Заявка отправлена',
@@ -413,6 +417,27 @@ export const requestsRoutes =
         tz: house.tz,
       });
 
+      // Двойное нажатие «Отправить» и повтор после обрыва связи не должны плодить
+      // одинаковые заявки: для диспетчера это дубли в кластере, для жителя — путаница.
+      // Повтором считаем ту же категорию того же автора за последние DUPLICATE_WINDOW_MIN минут.
+      const [duplicate] = await db
+        .select({ id: requests.id })
+        .from(requests)
+        .where(
+          and(
+            eq(requests.authorUserId, userId),
+            eq(requests.category, category.code),
+            gte(requests.createdAt, new Date(now.getTime() - DUPLICATE_WINDOW_MS)),
+          ),
+        )
+        .limit(1);
+
+      if (duplicate) {
+        // Возвращаем уже созданную заявку, а не ошибку: для пользователя повтор
+        // должен выглядеть как успех, иначе он нажмёт ещё раз.
+        return buildDetail(db, data, await loadRequest(duplicate.id), userId, now);
+      }
+
       const id = await db.transaction(async (tx) => {
         const number = await nextRequestNumber(tx, now.getUTCFullYear());
         const [created] = await tx
@@ -430,6 +455,10 @@ export const requestsRoutes =
             plannedNotice: input.plannedNotice,
             status: demoMode ? 'accepted' : 'new',
             dueAt: due,
+            // Время берём из часов приложения, а не из базы: в демо-режиме они сдвинуты,
+            // и иначе заявка оказалась бы «созданной» в прошлом относительно своих сроков.
+            createdAt: now,
+            updatedAt: now,
           })
           .returning({ id: requests.id });
         if (!created) throw new ApiError(500, 'internal', 'Не удалось создать заявку');
@@ -458,11 +487,14 @@ export const requestsRoutes =
           type: 'created',
           actorUserId: userId,
           payload: { number },
+          at: now,
         });
         // В демо-режиме диспетчера нет, поэтому заявка принимается сама:
         // иначе основной сценарий не пройти без второго аккаунта.
         if (demoMode) {
-          await tx.insert(requestEvents).values({ requestId: created.id, type: 'accepted' });
+          await tx
+            .insert(requestEvents)
+            .values({ requestId: created.id, type: 'accepted', at: now });
         }
 
         return created.id;
@@ -515,6 +547,7 @@ export const requestsRoutes =
           requestId: id,
           userId,
           apartmentLabel: parsed.data.apartmentLabel,
+          joinedAt: now,
         });
 
         if (parsed.data.measurements.length) {
@@ -536,6 +569,7 @@ export const requestsRoutes =
           actorUserId: userId,
           // Номер квартиры соседа виден: без него акт не составить. Имя не показываем.
           payload: { apartmentLabel: parsed.data.apartmentLabel },
+          at: now,
         });
 
         await enqueueNotification(tx, row.authorUserId, {
@@ -617,6 +651,7 @@ export const requestsRoutes =
           type: accepted ? 'confirmed' : 'reopened',
           actorUserId: userId,
           payload: parsed.data.note ? { note: parsed.data.note } : {},
+          at: now,
         });
       });
 
