@@ -336,7 +336,6 @@ export function NewRequest() {
                   <input
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     hidden
                     onChange={(e) => void onPhoto(e.target.files)}
                   />
