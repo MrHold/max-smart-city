@@ -1,11 +1,19 @@
-import { type DeleteMeResult, demoClockLabel, type MyData } from '@msc/domain';
+import { type DeleteMeResult, demoClockLabel, type MyData, transition } from '@msc/domain';
 import type {
+  AcceptInput,
+  AssignInput,
+  BulkResult,
   Category,
+  ClusterCard,
+  CompleteInput,
+  DispatcherInbox,
+  Executor,
   Home,
   HouseSearchItem,
   JoinInput,
   Me,
   NewRequestInput,
+  RejectInput,
   RequestDetail,
   RequestSummary,
 } from './types';
@@ -193,8 +201,167 @@ function sample() {
     claim: { available: true, url: null },
     gji: { available: false, afterAt: hoursAhead(4) },
   });
+
+  const base = requests.get(id);
+  if (base) {
+    const id2 = 'r-2026-0144';
+    requests.set(id2, {
+      ...base,
+      id: id2,
+      number: '2026-0144',
+      title: categories.find((c) => c.code === 'entrance_light')?.title ?? 'Не горит свет',
+      kind: 'repair',
+      status: 'new',
+      createdAt: hoursAgo(3),
+      dueAt: hoursAhead(45),
+      overdue: false,
+      locationText: 'подъезд 3, этаж 5',
+      joinersCount: 2,
+      description: 'Лампа на площадке пятого этажа не горит третий день.',
+      location: { scope: 'floor', entrance: 3, floor: 5 },
+      startedAt: hoursAgo(50),
+      measurements: [],
+      events: [{ type: 'created', label: 'Отправлена', at: hoursAgo(3) }],
+      joiners: [
+        { apartmentLabel: 'кв. 47', joinedAt: hoursAgo(2) },
+        { apartmentLabel: 'кв. 49', joinedAt: hoursAgo(1) },
+      ],
+      liability: null,
+      executor: null,
+      shareUrl: `https://max.ru/${BOT}?startapp=r_${id2}`,
+      claim: { available: false, url: null },
+      gji: { available: false, afterAt: null },
+    });
+  }
 }
 sample();
+
+const executorsList: Executor[] = [
+  {
+    id: 'exe-16-uyut-santeh',
+    nameShort: 'Иванов И.',
+    categories: ['heating', 'heating_off', 'hot_water', 'hot_water_off', 'cold_water_off'],
+    inBot: true,
+  },
+  {
+    id: 'exe-16-uyut-elektrik',
+    nameShort: 'Петров С.',
+    categories: ['entrance_light', 'yard_lighting', 'elevator'],
+    inBot: false,
+  },
+  {
+    id: 'exe-16-uyut-dvor',
+    nameShort: 'Сидорова А.',
+    categories: ['yard_cleaning', 'entrance_cleaning', 'playground', 'entrance_door'],
+    inBot: false,
+  },
+];
+
+const statusOrder: RequestDetail['status'][] = [
+  'new',
+  'reopened',
+  'accepted',
+  'assigned',
+  'in_progress',
+  'done',
+  'confirmed',
+  'rejected',
+];
+const categoryOf = (r: RequestDetail) =>
+  categories.find((c) => c.title === r.title)?.code ?? 'repair';
+const mockNow = () => Date.now() + demoOffsetMs;
+
+function mockInbox(): DispatcherInbox {
+  const now = mockNow();
+  const map = new Map<string, ClusterCard>();
+  for (const r of requests.values()) {
+    if (r.status === 'confirmed' || r.status === 'rejected') continue;
+    const category = categoryOf(r);
+    const key = `${HOUSE_ID}:${category}`;
+    const kopecks = r.liability?.houseKopecks ?? 0;
+    const perHourKopecks = r.liability?.perHourHouseKopecks ?? 0;
+    const overdue = new Date(r.dueAt).getTime() < now;
+    const executor = r.executor
+      ? {
+          id: executorsList.find((e) => e.nameShort === r.executor?.nameShort)?.id ?? 'exe',
+          nameShort: r.executor.nameShort,
+          plannedAt: null,
+        }
+      : null;
+    const cur = map.get(key);
+    if (!cur) {
+      map.set(key, {
+        key,
+        houseId: HOUSE_ID,
+        houseAddress: HOUSE_ADDRESS,
+        category,
+        title: r.title,
+        kind: r.kind,
+        status: r.status,
+        requestIds: [r.id],
+        apartments: 1 + r.joinersCount,
+        startedAt: r.startedAt,
+        dueAt: r.dueAt,
+        overdue,
+        kopecks,
+        perHourKopecks,
+        executor,
+      });
+      continue;
+    }
+    cur.requestIds.push(r.id);
+    cur.apartments += 1 + r.joinersCount;
+    if (statusOrder.indexOf(r.status) < statusOrder.indexOf(cur.status)) cur.status = r.status;
+    if (r.startedAt < cur.startedAt) cur.startedAt = r.startedAt;
+    if (r.dueAt < cur.dueAt) cur.dueAt = r.dueAt;
+    cur.overdue = cur.overdue || overdue;
+    cur.kopecks += kopecks;
+    cur.perHourKopecks += perHourKopecks;
+    cur.executor ??= executor;
+  }
+  const clusters = [...map.values()];
+  return {
+    orgName: 'УК «Уютный дом»',
+    now: new Date(now).toISOString(),
+    clusters,
+    totalKopecks: clusters.reduce((s, c) => s + c.kopecks, 0),
+    totalPerHourKopecks: clusters.reduce((s, c) => s + c.perHourKopecks, 0),
+  };
+}
+
+function bulk(
+  ids: string[],
+  event: 'accept' | 'reject' | 'assign' | 'complete',
+  apply: (r: RequestDetail) => Partial<RequestDetail>,
+  eventType: string,
+  label: string,
+): BulkResult {
+  const skipped: BulkResult['skipped'] = [];
+  let updated = 0;
+  const at = new Date(mockNow()).toISOString();
+  for (const id of ids) {
+    const r = requests.get(id);
+    if (!r) {
+      skipped.push({ requestId: id, reason: 'Заявка не найдена' });
+      continue;
+    }
+    let next: RequestDetail['status'];
+    try {
+      next = transition(r.status, event);
+    } catch {
+      skipped.push({ requestId: id, reason: `Статус «${r.status}» не позволяет` });
+      continue;
+    }
+    requests.set(id, {
+      ...r,
+      ...apply(r),
+      status: next,
+      events: [...r.events, { type: eventType, label, at }],
+    });
+    updated++;
+  }
+  return { updated, skipped };
+}
 
 function summary(r: RequestDetail): RequestSummary {
   const { id, number, title, kind, status, createdAt, dueAt, overdue, locationText, joinersCount } =
@@ -458,6 +625,53 @@ export async function mockApi(path: string, init: RequestInit): Promise<unknown>
     };
     me = { ...me, role: null, house: null, apartmentLabel: null, memberships: [] };
     return result;
+  }
+
+  if (p === '/api/dispatcher/inbox') return mockInbox();
+  if (p === '/api/dispatcher/executors') return executorsList;
+  const inviteMatch = p.match(/^\/api\/dispatcher\/executors\/([^/]+)\/invite$/);
+  if (inviteMatch) return { url: `https://max.ru/${BOT}?start=inv_${inviteMatch[1]}` };
+  if (p === '/api/demo/dispatcher' && method === 'POST') {
+    me = { ...me, role: 'dispatcher' };
+    return { role: 'dispatcher', orgId: 'org-1', orgName: 'УК «Уютный дом»' };
+  }
+  if (p === '/api/dispatcher/accept' && method === 'POST') {
+    const b = body as AcceptInput;
+    return bulk(b.requestIds, 'accept', () => ({}), 'accepted', 'Принята диспетчером');
+  }
+  if (p === '/api/dispatcher/reject' && method === 'POST') {
+    const b = body as RejectInput;
+    return bulk(b.requestIds, 'reject', () => ({}), 'rejected', `Отклонена: ${b.reason}`);
+  }
+  if (p === '/api/dispatcher/assign' && method === 'POST') {
+    const b = body as AssignInput;
+    const e = executorsList.find((x) => x.id === b.executorId);
+    if (!e) throw notFound();
+    const slot = b.plannedAt
+      ? new Date(b.plannedAt).toLocaleString('ru-RU', {
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : null;
+    return bulk(
+      b.requestIds,
+      'assign',
+      () => ({ executor: { nameShort: e.nameShort, slot, phone: '+7 900 000-11-22' } }),
+      'assigned',
+      'Исполнитель назначен',
+    );
+  }
+  if (p === '/api/dispatcher/complete' && method === 'POST') {
+    const b = body as CompleteInput;
+    return bulk(
+      b.requestIds,
+      'complete',
+      () => ({ endedAt: new Date(mockNow()).toISOString() }),
+      'completed',
+      'Выполнена',
+    );
   }
 
   if (p === '/api/photos' && method === 'POST') return { key: `mock/${Date.now()}.jpg`, url: '' };
