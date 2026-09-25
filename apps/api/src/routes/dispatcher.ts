@@ -8,6 +8,7 @@ import {
   executors as executorsTable,
   houses,
   inArray,
+  inviteToken,
   joins,
   measurements as measurementsTable,
   memberships,
@@ -28,6 +29,7 @@ import {
   cluster,
   type DispatcherInbox,
   type Executor,
+  type ExecutorInvite,
   type Measurement,
   RejectInputSchema,
   type RequestStatus,
@@ -359,8 +361,38 @@ export const dispatcherRoutes =
         .where(eq(executorsTable.orgId, ctx.orgId));
 
       return rows.map(
-        (e): Executor => ({ id: e.id, nameShort: e.nameShort, categories: e.categories }),
+        (e): Executor => ({
+          id: e.id,
+          nameShort: e.nameShort,
+          categories: e.categories,
+          inBot: e.userId !== null,
+        }),
       );
+    });
+
+    // Кнопка «Пригласить в бот»: ссылка для исполнителя своей УК. Открыв её в MAX, исполнитель
+    // привязывается к боту и начинает получать наряды (привязку делает бот, apps/bot/src/executor.ts).
+    app.get('/api/dispatcher/executors/:id/invite', { preHandler: authenticate }, async (req) => {
+      const { userId } = getAuth(req);
+      const ctx = await requireDispatcher(userId);
+      const { id } = req.params as { id: string };
+
+      const [executor] = await db
+        .select({ id: executorsTable.id })
+        .from(executorsTable)
+        .where(and(eq(executorsTable.id, id), eq(executorsTable.orgId, ctx.orgId)))
+        .limit(1);
+      if (!executor) throw notFound('Исполнитель');
+
+      const appLink = process.env.APP_LINK;
+      const secret = process.env.USER_HASH_SECRET;
+      if (!appLink || !secret) {
+        throw new ApiError(503, 'invites_disabled', 'Приглашения в бот не настроены на сервере');
+      }
+      const invite: ExecutorInvite = {
+        url: `${appLink}?start=${inviteToken(executor.id, secret)}`,
+      };
+      return invite;
     });
 
     /**
