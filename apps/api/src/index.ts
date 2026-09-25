@@ -1,9 +1,11 @@
 import { createDb } from '@msc/db';
+import { systemClock } from '@msc/domain';
 import { buildApp } from './app';
 import { authConfigFromEnv } from './auth/config';
 import { createDemoClock } from './clock/demo';
 import { loadRegionsData, regionsDataSource } from './data/regions';
 import { seedFromRegions } from './data/seed';
+import { closeStaleRequests, startAutoClose } from './jobs/auto-close';
 
 const port = Number(process.env.API_PORT ?? 3001);
 const corsOrigin = process.env.CORS_ORIGIN
@@ -29,6 +31,7 @@ const app = buildApp({
   db,
   clock,
   auth: auth.ok ? auth.config : undefined,
+  afterClockShift: db ? () => closeStaleRequests(db, clock ?? systemClock) : undefined,
 });
 
 app.log.info(
@@ -36,6 +39,7 @@ app.log.info(
 );
 
 if (db) {
+  startAutoClose(db, clock ?? systemClock, app.log);
   const seeded = await seedFromRegions(db, regions);
   app.log.info(
     `Дома и организации из regions/ в БД: ${seeded.houses} домов, ${seeded.orgs} организаций`,

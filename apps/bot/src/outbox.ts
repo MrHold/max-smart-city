@@ -74,6 +74,8 @@ export function notificationText(p: Payload): string {
       ];
       return lines.filter((line) => line !== null).join('\n');
     }
+    case 'auto_closed':
+      return `Заявка ${no} закрыта автоматически: вы не подтвердили результат в течение ${p.afterDays ?? 3} суток. Если проблема осталась, подайте новую заявку.`;
     case 'in_progress':
       return `Исполнитель${p.nameShort ? ` ${p.nameShort}` : ''} приступил к работе по заявке ${no}.`;
     case 'executor_declined':

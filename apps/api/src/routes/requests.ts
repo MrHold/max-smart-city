@@ -265,7 +265,10 @@ async function buildDetail(
     photos: photoRows.map((p) => ({ key: p.storageKey, url: `/api/photos/${p.storageKey}` })),
     events: eventRows.map((e) => ({
       type: e.type,
-      label: eventLabels[e.type] ?? e.type,
+      label:
+        e.type === 'confirmed' && (e.payload as { auto?: boolean } | null)?.auto
+          ? 'Закрыта автоматически: подтверждение не поступило'
+          : (eventLabels[e.type] ?? e.type),
       at: e.at.toISOString(),
     })),
     joiners: joinRows.map((j) => ({

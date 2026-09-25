@@ -32,6 +32,8 @@ export interface AppOptions {
   logger?: boolean;
   db?: Db;
   auth?: AuthConfig;
+  /** Вызывается после перемотки демо-часов. */
+  afterClockShift?: () => Promise<unknown>;
 }
 
 /** Демо-часы отличаются от обычных умением сдвигаться: только для них есть маршруты перемотки. */
@@ -119,7 +121,7 @@ export function buildApp(opts: AppOptions) {
       app.register(documentsRoutes(opts.db, opts.regions, clock, authenticate, secret));
     }
     if (isDemoClock(clock)) {
-      app.register(demoRoutes(clock, authenticate));
+      app.register(demoRoutes(clock, authenticate, opts.afterClockShift));
       app.addHook('onClose', async () => clock.stop());
     }
   }
