@@ -4,6 +4,7 @@ import {
   consents,
   type Db,
   eq,
+  executors,
   houses,
   joins,
   memberships,
@@ -149,7 +150,7 @@ export const privacyRoutes =
 
         // Фотографии остаются доказательством по заявке, но перестают быть «вашими».
         await tx.update(photos).set({ uploadedBy: null }).where(eq(photos.uploadedBy, userId));
-
+        await tx.update(executors).set({ userId: null }).where(eq(executors.userId, userId));
         const authored = await tx
           .select({ id: requests.id })
           .from(requests)

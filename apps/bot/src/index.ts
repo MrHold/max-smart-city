@@ -1,5 +1,6 @@
 import { Bot, Keyboard } from '@maxhub/max-bot-api';
 import { createDb, parseEncKey } from '@msc/db';
+import { registerExecutor } from './executor';
 import { startOutbox } from './outbox';
 
 const token = process.env.BOT_TOKEN;
@@ -23,6 +24,24 @@ const menu = Keyboard.inlineKeyboard([
   [Keyboard.button.link('Сайт хакатона', 'https://hackathon-max.vk.company')],
 ]);
 
+// База нужна исполнителям и почтальону. Без неё бот всё равно отвечает в чате.
+const databaseUrl = process.env.DATABASE_URL;
+const encKeyBase64 = process.env.USER_ID_ENC_KEY;
+const hashSecret = process.env.USER_HASH_SECRET;
+const db = databaseUrl ? createDb(databaseUrl).db : null;
+const encKey = encKeyBase64 ? parseEncKey(encKeyBase64) : null;
+
+// Исполнитель: приглашение inv_… и кнопки наряда. Регистрируется РАНЬШЕ приветствия и /start,
+// иначе «/start inv_…» перехватит обычное меню.
+if (db && encKey && hashSecret) {
+  registerExecutor(bot, { db, hashSecret, encKey, demoMode: process.env.DEMO_MODE === '1' });
+  console.log('Исполнители в боте включены');
+} else {
+  console.warn(
+    'Исполнители выключены: не заданы DATABASE_URL, USER_ID_ENC_KEY или USER_HASH_SECRET',
+  );
+}
+
 bot.on('bot_started', (ctx) => {
   const name = ctx.user?.first_name ?? 'сосед';
   return ctx.reply(`Здравствуйте, ${name}! Я помогу сообщить о проблеме в доме.`, {
@@ -42,18 +61,9 @@ bot.catch((err) => {
   console.error('Ошибка в обработчике:', err);
 });
 
-// Почтальон: рассылает уведомления, которые API кладёт в outbox
-const databaseUrl = process.env.DATABASE_URL;
-const encKeyBase64 = process.env.USER_ID_ENC_KEY;
-if (databaseUrl && encKeyBase64) {
-  const { db } = createDb(databaseUrl);
-  startOutbox({
-    bot,
-    db,
-    encKey: parseEncKey(encKeyBase64),
-    botUsername: me.username,
-    botId: me.user_id,
-  });
+// Почтальон: рассылает уведомления и наряды, которые API кладёт в outbox
+if (db && encKey) {
+  startOutbox({ bot, db, encKey, botUsername: me.username, botId: me.user_id });
   console.log('Уведомления из outbox включены');
 } else {
   console.warn('Уведомления выключены: не заданы DATABASE_URL или USER_ID_ENC_KEY');
