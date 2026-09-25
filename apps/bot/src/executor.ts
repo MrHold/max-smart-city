@@ -20,7 +20,7 @@ import { type RequestStatus, TransitionError, transition, type WorkflowEvent } f
 import { nowFor } from './clock';
 import { orderKeyboard } from './keyboards';
 
-type Deps = { db: Db; hashSecret: string; encKey: Buffer; demoMode: boolean };
+export type Deps = { db: Db; hashSecret: string; encKey: Buffer; demoMode: boolean };
 
 const ACTIONS = {
   start: { event: 'start', eventType: 'started' },
@@ -228,4 +228,16 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
       await ctx.reply(outcome.popup);
     }
   });
+}
+
+/** Имя исполнителя, если этот пользователь MAX к нему привязан, иначе null. */
+export async function executorNameFor(deps: Deps, maxUserId: number): Promise<string | null> {
+  const userId = await userIdFor(deps, maxUserId, false);
+  if (!userId) return null;
+  const [executor] = await deps.db
+    .select({ nameShort: executors.nameShort })
+    .from(executors)
+    .where(eq(executors.userId, userId))
+    .limit(1);
+  return executor?.nameShort ?? null;
 }
