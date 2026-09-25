@@ -1,7 +1,8 @@
 import { Bot, Keyboard } from '@maxhub/max-bot-api';
 import { createDb, parseEncKey } from '@msc/db';
-import { registerExecutor } from './executor';
+import { type Deps, executorNameFor, registerExecutor } from './executor';
 import { startOutbox } from './outbox';
+import { botCommands, contactsText, executorNote, fallbackText, welcomeText } from './texts';
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -17,11 +18,12 @@ if (!me.username) {
   console.error('У бота нет публичного имени — кнопку мини-приложения не построить');
   process.exit(1);
 }
+const botUsername = me.username; // проверенное имя: string, без null — им пользуются обработчики ниже
 
 const menu = Keyboard.inlineKeyboard([
-  [Keyboard.button.openApp('Мой дом', me.username, me.user_id)],
+  [Keyboard.button.openApp('Мой дом', botUsername, me.user_id)],
   [Keyboard.button.callback('Контакты УК', 'home:contacts')],
-  [Keyboard.button.link('Сайт хакатона', 'https://hackathon-max.vk.company')],
+  [Keyboard.button.callback('ℹ️ Что умеет бот', 'home:help')],
 ]);
 
 // База нужна исполнителям и почтальону. Без неё бот всё равно отвечает в чате.
@@ -30,11 +32,15 @@ const encKeyBase64 = process.env.USER_ID_ENC_KEY;
 const hashSecret = process.env.USER_HASH_SECRET;
 const db = databaseUrl ? createDb(databaseUrl).db : null;
 const encKey = encKeyBase64 ? parseEncKey(encKeyBase64) : null;
+const executorDeps: Deps | null =
+  db && encKey && hashSecret
+    ? { db, hashSecret, encKey, demoMode: process.env.DEMO_MODE === '1' }
+    : null;
 
 // Исполнитель: приглашение inv_… и кнопки наряда. Регистрируется РАНЬШЕ приветствия и /start,
 // иначе «/start inv_…» перехватит обычное меню.
-if (db && encKey && hashSecret) {
-  registerExecutor(bot, { db, hashSecret, encKey, demoMode: process.env.DEMO_MODE === '1' });
+if (executorDeps) {
+  registerExecutor(bot, executorDeps);
   console.log('Исполнители в боте включены');
 } else {
   console.warn(
@@ -42,28 +48,52 @@ if (db && encKey && hashSecret) {
   );
 }
 
-bot.on('bot_started', (ctx) => {
-  const name = ctx.user?.first_name ?? 'сосед';
-  return ctx.reply(`Здравствуйте, ${name}! Я помогу сообщить о проблеме в доме.`, {
-    attachments: [menu],
-  });
-});
+/** Приветствие с описанием; исполнителю — ещё строка про наряды. */
+async function greeting(name: string | null | undefined, maxUserId: number | undefined) {
+  let text = welcomeText(name);
+  if (executorDeps && maxUserId) {
+    const executorName = await executorNameFor(executorDeps, maxUserId).catch(() => null);
+    if (executorName) text += executorNote(executorName);
+  }
+  return text;
+}
 
-bot.command('start', (ctx) => ctx.reply('Главное меню', { attachments: [menu] }));
-
-bot.action('home:contacts', (ctx) => ctx.reply('Контакты УК появятся после привязки к дому.'));
-
-bot.on('message_created', (ctx) =>
-  ctx.reply('Я пока понимаю только /start. Нажмите кнопку в меню.', { attachments: [menu] }),
+bot.on('bot_started', async (ctx) =>
+  ctx.reply(await greeting(ctx.user?.first_name, ctx.user?.user_id), { attachments: [menu] }),
 );
+
+bot.command(['start', 'help'], async (ctx) =>
+  ctx.reply(await greeting(ctx.message?.sender?.first_name, ctx.message?.sender?.user_id), {
+    attachments: [menu],
+  }),
+);
+
+bot.action('home:help', async (ctx) =>
+  ctx.reply(await greeting(ctx.user?.first_name, ctx.user?.user_id), { attachments: [menu] }),
+);
+
+bot.action('home:contacts', (ctx) =>
+  ctx.reply(contactsText, {
+    attachments: [
+      Keyboard.inlineKeyboard([[Keyboard.button.openApp('Мой дом', botUsername, me.user_id)]]),
+    ],
+  }),
+);
+
+bot.on('message_created', (ctx) => ctx.reply(fallbackText, { attachments: [menu] }));
 
 bot.catch((err) => {
   console.error('Ошибка в обработчике:', err);
 });
 
+// Подсказка команд при вводе «/» в чате. Не получилось — не страшно, бот работает и без неё.
+await bot.api.setMyCommands(botCommands).catch((err) => {
+  console.warn('Не удалось задать список команд:', err instanceof Error ? err.message : err);
+});
+
 // Почтальон: рассылает уведомления и наряды, которые API кладёт в outbox
 if (db && encKey) {
-  startOutbox({ bot, db, encKey, botUsername: me.username, botId: me.user_id });
+  startOutbox({ bot, db, encKey, botUsername, botId: me.user_id });
   console.log('Уведомления из outbox включены');
 } else {
   console.warn('Уведомления выключены: не заданы DATABASE_URL или USER_ID_ENC_KEY');
