@@ -1,5 +1,6 @@
 import { Bot, Keyboard } from '@maxhub/max-bot-api';
 import { createDb, parseEncKey } from '@msc/db';
+import { ignoreRepeatedTaps } from './debounce';
 import { type Deps, executorNameFor, registerExecutor } from './executor';
 import { startOutbox } from './outbox';
 import { botCommands, contactsText, executorNote, fallbackText, welcomeText } from './texts';
@@ -25,6 +26,9 @@ const menu = Keyboard.inlineKeyboard([
   [Keyboard.button.callback('Контакты УК', 'home:contacts')],
   [Keyboard.button.callback('ℹ️ Что умеет бот', 'home:help')],
 ]);
+
+// Двойной тап по кнопке: второе нажатие молча игнорируется. Первым — до всех обработчиков кнопок.
+ignoreRepeatedTaps(bot);
 
 // База нужна исполнителям и почтальону. Без неё бот всё равно отвечает в чате.
 const databaseUrl = process.env.DATABASE_URL;

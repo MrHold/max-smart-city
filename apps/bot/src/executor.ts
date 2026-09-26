@@ -29,7 +29,22 @@ const ACTIONS = {
 } as const satisfies Record<string, { event: WorkflowEvent; eventType: string }>;
 type ActionKey = keyof typeof ACTIONS;
 
-type Outcome = { popup: string; reply?: string; keyboard?: ReturnType<typeof orderKeyboard> };
+// Где уже стоит заявка, если это же действие уже выполнено: повтор кнопки в таком случае молчит
+const ALREADY_THERE: Record<ActionKey, string[]> = {
+  start: ['in_progress', 'done', 'confirmed'],
+  complete: ['done', 'confirmed'],
+  decline: ['accepted'],
+};
+
+type Outcome = {
+  popup: string;
+  reply?: string;
+  keyboard?: ReturnType<typeof orderKeyboard>;
+  /** Повтор уже выполненного действия: ничего не отвечаем, только снимаем «крутилку» с кнопки. */
+  silent?: boolean;
+};
+
+const SILENT: Outcome = { popup: '', silent: true };
 
 /** users.id по MAX user_id. create — завести пользователя, если его ещё нет (как при входе в API). */
 async function userIdFor(deps: Deps, maxUserId: number, create: boolean): Promise<string | null> {
@@ -91,15 +106,20 @@ async function applyAction(
 
   const [row] = await db.select().from(requests).where(eq(requests.id, requestId)).limit(1);
   if (!row) return { popup: 'Заявка не найдена.' };
-  if (row.executorId !== executor.id) return { popup: 'Эта заявка назначена не вам.' };
+  if (row.executorId !== executor.id) {
+    // Сам только что нажал «Не могу» (executor_id уже обнулён), и второе нажатие догнало первое
+    if (key === 'decline' && row.executorId === null) return SILENT;
+    return { popup: 'Эта заявка назначена не вам.' };
+  }
 
   let next: RequestStatus;
   try {
     next = transition(row.status as RequestStatus, ACTIONS[key].event);
   } catch (err) {
-    if (err instanceof TransitionError)
-      return { popup: 'Заявка уже закрыта или изменена — ничего делать не нужно.' };
-    throw err;
+    if (!(err instanceof TransitionError)) throw err;
+    // Заявка уже там, куда ведёт кнопка: это повтор того же действия — молчим
+    if (ALREADY_THERE[key].includes(row.status)) return SILENT;
+    return { popup: 'Заявка уже закрыта или изменена — ничего делать не нужно.' };
   }
 
   const now = await nowFor(db, deps.demoMode);
@@ -163,7 +183,8 @@ async function applyAction(
     return true;
   });
 
-  if (!applied) return { popup: 'Уже отмечено.' };
+  // Повтор или заявку одновременно поменял диспетчер — первое нажатие уже всё сделало
+  if (!applied) return SILENT;
 
   // Наряд заменится этим текстом — номер и суть заявки оставляем, чтобы было видно, о чём речь
   const header = `Заявка №${row.number}: ${row.description}`;
@@ -216,6 +237,13 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     if (!key || !requestId || !maxUserId || !callbackId) return;
 
     const outcome = await applyAction(deps, key, requestId, maxUserId, callbackId);
+
+    if (outcome.silent) {
+      // Повтор: только снимаем «крутилку» с кнопки, наряд и чат не трогаем
+      await ctx.answerOnCallback({}).catch(() => {});
+      return;
+    }
+
     if (outcome.reply) {
       // Успех: наряд заменяется новым состоянием; после «Выполнено» и «Не могу» кнопок больше нет
       const attachments = outcome.keyboard ? [outcome.keyboard] : [];
@@ -223,7 +251,7 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
         .answerOnCallback({ message: { text: outcome.reply, attachments } })
         .catch(() => ctx.reply(outcome.reply ?? '', { attachments }));
     } else {
-      // Отказ (не ваша заявка, уже закрыта, повтор): наряд не трогаем, объясняем отдельным сообщением
+      // Отказ (не ваша заявка, уже закрыта): наряд не трогаем, объясняем отдельным сообщением
       await ctx.answerOnCallback({}).catch(() => {});
       await ctx.reply(outcome.popup);
     }
