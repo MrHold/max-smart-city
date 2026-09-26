@@ -9,3 +9,18 @@ export function orderKeyboard(requestId: string, stage: 'assigned' | 'in_progres
     stage === 'assigned' ? [[accept], [done], [cannot]] : [[done], [cannot]],
   );
 }
+
+/** Режим фото после «Выполнено»: завершить заявку или вернуться к наряду. */
+export function photoModeKeyboard(requestId: string) {
+  return Keyboard.inlineKeyboard([
+    [Keyboard.button.callback('✅ Завершить заявку', `exe:finish:${requestId}`)],
+    [Keyboard.button.callback('↩️ Назад', `exe:back:${requestId}`)],
+  ]);
+}
+
+/** Под каждым ответом в режиме фото — сразу кнопка завершения. */
+export function finishKeyboard(requestId: string) {
+  return Keyboard.inlineKeyboard([
+    [Keyboard.button.callback('✅ Завершить заявку', `exe:finish:${requestId}`)],
+  ]);
+}
