@@ -1,17 +1,28 @@
 # Весь проект одной командой: docker compose up -d --build
 # Наружу открыт только web (Caddy): 80 и 443. Остальные сервисы — внутри сети Docker.
 
+# Логи контейнеров: не больше 3 файлов по 10 МБ на сервис, старые удаляются сами.
+# Без ограничения Docker копит логи бесконечно — за две недели проверки это может занять весь диск.
+# Стоит выше x-app: в YAML блок с &имя должен быть объявлен раньше, чем на него сослались *имя.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
 # Общие настройки для api, bot и migrate: один образ из корневого Dockerfile
 x-app: &app
   build: .
   restart: unless-stopped
   init: true
   env_file: .env
+  logging: *logging
 
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -70,6 +81,7 @@ services:
         VITE_BOT_NAME: ${VITE_BOT_NAME:-}
         VITE_DEMO_MODE: ${VITE_DEMO_MODE:-1}
     restart: unless-stopped
+    logging: *logging
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-:80}
     ports:
@@ -78,7 +90,7 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
-     # bot сюда не добавлять: иначе «docker compose up web» запускает бота,
+    # bot сюда не добавлять: иначе «docker compose up web» запускает бота,
     # а локальный бот с настоящим токеном снимает webhook с сервера
     depends_on:
       - api
