@@ -58,8 +58,10 @@ export function notificationText(p: Payload): string {
       const who = name ? `: ${name}${name.endsWith('.') ? '' : '.'}` : '.';
       return `По заявке ${no} назначен исполнитель${who}${when ? ` Плановое время — ${when}.` : ''}`;
     }
-    case 'completed':
-      return `Работа по заявке ${no} выполнена. Проверьте результат и подтвердите в приложении.`;
+    case 'completed': {
+      const n = typeof p.photos === 'number' ? p.photos : 0;
+      return `Работа по заявке ${no} выполнена${n ? `, исполнитель приложил фото: ${n}` : ''}. Проверьте результат и подтвердите в приложении.`;
+    }
     case 'order': {
       const when = formatDate(p.plannedAt);
       const what = categoryTitle(p.categoryTitle ?? p.category);
@@ -80,8 +82,6 @@ export function notificationText(p: Payload): string {
       return `Исполнитель${p.nameShort ? ` ${p.nameShort}` : ''} приступил к работе по заявке ${no}.`;
     case 'executor_declined':
       return `Исполнитель${p.nameShort ? ` ${p.nameShort}` : ''} отказался от заявки ${no}. Назначьте другого в кабинете диспетчера.`;
-    case 'photo_after':
-      return `Исполнитель${p.nameShort ? ` ${p.nameShort}` : ''} прислал фото результата по заявке ${no}.`;
     default:
       return `Заявка ${no} обновлена. Подробности — в приложении.`;
   }
