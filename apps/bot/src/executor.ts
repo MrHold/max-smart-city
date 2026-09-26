@@ -7,11 +7,14 @@ import {
   eq,
   executors,
   houses,
+  inArray,
   memberships,
   or,
+  photos,
   processedUpdates,
   requestEvents,
   requests,
+  sql,
   userHash,
   users,
   verifyInvite,
@@ -19,8 +22,16 @@ import {
 import { type RequestStatus, TransitionError, transition, type WorkflowEvent } from '@msc/domain';
 import { nowFor } from './clock';
 import { orderKeyboard } from './keyboards';
+import { downloadImage, savePhoto } from './photo';
 
-export type Deps = { db: Db; hashSecret: string; encKey: Buffer; demoMode: boolean };
+export type Deps = {
+  db: Db;
+  hashSecret: string;
+  encKey: Buffer;
+  demoMode: boolean;
+  /** Папка с фото (та же, что у API). null — приём фото от исполнителя выключен. */
+  photosDir: string | null;
+};
 
 const ACTIONS = {
   start: { event: 'start', eventType: 'started' },
@@ -35,6 +46,9 @@ const ALREADY_THERE: Record<ActionKey, string[]> = {
   complete: ['done', 'confirmed'],
   decline: ['accepted'],
 };
+
+const PHOTO_WAIT_MS = 30 * 60_000; // после «Выполнено» полчаса ждём фото именно для этой заявки
+const MAX_PHOTOS_PER_MESSAGE = 5;
 
 type Outcome = {
   popup: string;
@@ -64,6 +78,18 @@ async function userIdFor(deps: Deps, maxUserId: number, create: boolean): Promis
     .values({ userHash: hash, userIdEnc: encryptUserId(maxUserId, deps.encKey) })
     .onConflictDoNothing({ target: users.userHash });
   return find();
+}
+
+/** Исполнитель, привязанный к этому пользователю MAX, и его users.id. */
+async function executorFor(deps: Deps, maxUserId: number) {
+  const userId = await userIdFor(deps, maxUserId, false);
+  if (!userId) return null;
+  const [executor] = await deps.db
+    .select()
+    .from(executors)
+    .where(eq(executors.userId, userId))
+    .limit(1);
+  return executor ? { userId, executor } : null;
 }
 
 /** Привязка по приглашению: executors.user_id = этот пользователь MAX. */
@@ -99,10 +125,9 @@ async function applyAction(
     popup: 'Вы не привязаны как исполнитель. Откройте ссылку-приглашение от диспетчера.',
   };
 
-  const userId = await userIdFor(deps, maxUserId, false);
-  if (!userId) return notLinked;
-  const [executor] = await db.select().from(executors).where(eq(executors.userId, userId)).limit(1);
-  if (!executor) return notLinked;
+  const found = await executorFor(deps, maxUserId);
+  if (!found) return notLinked;
+  const { userId, executor } = found;
 
   const [row] = await db.select().from(requests).where(eq(requests.id, requestId)).limit(1);
   if (!row) return { popup: 'Заявка не найдена.' };
@@ -208,10 +233,98 @@ async function applyAction(
 }
 
 /**
+ * Фото результата от исполнителя → photos (stage = after) у заявки + уведомление жителю.
+ * null — пользователь не исполнитель: пусть сообщение обработает общий обработчик.
+ * '' — повторная доставка того же сообщения: молчим.
+ */
+async function savePhotosFromExecutor(
+  deps: Deps,
+  photosDir: string,
+  maxUserId: number,
+  mid: string,
+  urls: string[],
+  waitingFor: string | undefined,
+): Promise<string | null> {
+  const { db } = deps;
+  const found = await executorFor(deps, maxUserId);
+  if (!found) return null;
+  const { userId, executor } = found;
+
+  // К какой заявке: той, после «Выполнено» которой ждём фото; иначе — единственной текущей за сутки
+  let requestId = waitingFor;
+  if (!requestId) {
+    const active = await db
+      .select({ id: requests.id })
+      .from(requests)
+      .where(
+        and(
+          eq(requests.executorId, executor.id),
+          inArray(requests.status, ['in_progress', 'done']),
+          sql`${requests.updatedAt} > now() - interval '1 day'`,
+        ),
+      );
+    if (active.length !== 1) {
+      return 'Не понял, к какой заявке это фото. Нажмите «Выполнено» под нужным нарядом и пришлите фото следом.';
+    }
+    requestId = active[0]?.id;
+  }
+
+  const [row] = requestId
+    ? await db.select().from(requests).where(eq(requests.id, requestId)).limit(1)
+    : [];
+  if (!row || row.executorId !== executor.id) return 'Эта заявка назначена не вам.';
+
+  // Повторная доставка того же сообщения от MAX — второй раз не сохраняем
+  const fresh = await db
+    .insert(processedUpdates)
+    .values({ updateKey: `msg:${mid}` })
+    .onConflictDoNothing()
+    .returning({ key: processedUpdates.updateKey });
+  if (fresh.length === 0) return '';
+
+  let saved = 0;
+  try {
+    for (const url of urls) {
+      const { buffer, mime } = await downloadImage(url);
+      const { key, sha256 } = await savePhoto(photosDir, buffer, mime);
+      const [same] = await db
+        .select({ id: photos.id })
+        .from(photos)
+        .where(and(eq(photos.requestId, row.id), eq(photos.storageKey, key)))
+        .limit(1);
+      if (same) continue; // это же фото уже прислали раньше
+      await db
+        .insert(photos)
+        .values({ requestId: row.id, storageKey: key, sha256, stage: 'after', uploadedBy: userId });
+      saved++;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'too_big') return 'Фото больше 5 МБ — пришлите поменьше.';
+    if (message.startsWith('unsupported'))
+      return 'Этот формат не подходит — пришлите фото (JPEG, PNG или WebP).';
+    console.error('Фото от исполнителя не сохранилось:', err);
+    return 'Не получилось сохранить фото, попробуйте отправить ещё раз.';
+  }
+
+  if (saved === 0) return 'Это фото уже есть в заявке.';
+  await enqueueNotification(db, row.authorUserId, {
+    type: 'photo_after',
+    requestId: row.id,
+    number: row.number,
+    nameShort: executor.nameShort,
+  });
+  return `📷 Фото добавлено к заявке №${row.number} — житель увидит его в карточке.`;
+}
+
+/**
  * Исполнитель в боте. Регистрировать РАНЬШЕ общих обработчиков: иначе /start inv_… перехватит
- * обычное приветствие.
+ * обычное приветствие, а фото уйдёт в «Не понял сообщение».
  */
 export function registerExecutor(bot: Bot, deps: Deps): void {
+  // Кому бот сейчас ждёт фото результата: MAX user_id → заявка и до какого времени
+  const awaitingPhoto = new Map<number, { requestId: string; until: number }>();
+
   // Открыл ссылку max.ru/<бот>?start=inv_… — MAX присылает bot_started с этим payload
   bot.on('bot_started', async (ctx, next) => {
     const payload = ctx.startPayload;
@@ -226,6 +339,30 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     const maxUserId = ctx.message?.sender?.user_id;
     if (!token || !maxUserId) return;
     await ctx.reply(await bindExecutor(deps, maxUserId, token));
+  });
+
+  // Фото в чате: если прислал исполнитель — это фото результата
+  bot.on('message_created', async (ctx, next) => {
+    const urls: string[] = [];
+    for (const a of ctx.message?.body?.attachments ?? []) {
+      if (a.type === 'image') urls.push(a.payload.url);
+    }
+    const maxUserId = ctx.message?.sender?.user_id;
+    const mid = ctx.message?.body?.mid;
+    if (urls.length === 0 || !maxUserId || !mid || !deps.photosDir) return next();
+
+    const waiting = awaitingPhoto.get(maxUserId);
+    const waitingFor = waiting && waiting.until > Date.now() ? waiting.requestId : undefined;
+    const text = await savePhotosFromExecutor(
+      deps,
+      deps.photosDir,
+      maxUserId,
+      mid,
+      urls.slice(0, MAX_PHOTOS_PER_MESSAGE),
+      waitingFor,
+    );
+    if (text === null) return next(); // не исполнитель — ответит общий обработчик
+    if (text) await ctx.reply(text);
   });
 
   // Кнопки под нарядом: exe:start|complete|decline:<id заявки>
@@ -250,6 +387,13 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
       await ctx
         .answerOnCallback({ message: { text: outcome.reply, attachments } })
         .catch(() => ctx.reply(outcome.reply ?? '', { attachments }));
+
+      if (key === 'complete' && deps.photosDir) {
+        awaitingPhoto.set(maxUserId, { requestId, until: Date.now() + PHOTO_WAIT_MS });
+        await ctx.reply(
+          '📷 Пришлите фото результата — житель увидит его в заявке. Если фото нет, ничего делать не нужно.',
+        );
+      }
     } else {
       // Отказ (не ваша заявка, уже закрыта): наряд не трогаем, объясняем отдельным сообщением
       await ctx.answerOnCallback({}).catch(() => {});
@@ -260,12 +404,6 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
 
 /** Имя исполнителя, если этот пользователь MAX к нему привязан, иначе null. */
 export async function executorNameFor(deps: Deps, maxUserId: number): Promise<string | null> {
-  const userId = await userIdFor(deps, maxUserId, false);
-  if (!userId) return null;
-  const [executor] = await deps.db
-    .select({ nameShort: executors.nameShort })
-    .from(executors)
-    .where(eq(executors.userId, userId))
-    .limit(1);
-  return executor?.nameShort ?? null;
+  const found = await executorFor(deps, maxUserId);
+  return found?.executor.nameShort ?? null;
 }

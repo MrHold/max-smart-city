@@ -68,6 +68,10 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       BOT_PORT: "3002"
+      PHOTOS_DIR: /data/photos
+    # Тот же том, что у api: фото результата от исполнителя API отдаёт мини-приложению по ключу
+    volumes:
+      - photos:/data/photos
     depends_on:
       migrate:
         condition: service_completed_successfully

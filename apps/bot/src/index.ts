@@ -38,14 +38,23 @@ const db = databaseUrl ? createDb(databaseUrl).db : null;
 const encKey = encKeyBase64 ? parseEncKey(encKeyBase64) : null;
 const executorDeps: Deps | null =
   db && encKey && hashSecret
-    ? { db, hashSecret, encKey, demoMode: process.env.DEMO_MODE === '1' }
+    ? {
+        db,
+        hashSecret,
+        encKey,
+        demoMode: process.env.DEMO_MODE === '1',
+        // Та же папка, что у API (на сервере — общий том photos): фото от исполнителя видно в карточке
+        photosDir: process.env.PHOTOS_DIR ?? null,
+      }
     : null;
 
-// Исполнитель: приглашение inv_… и кнопки наряда. Регистрируется РАНЬШЕ приветствия и /start,
-// иначе «/start inv_…» перехватит обычное меню.
+// Исполнитель: приглашение inv_…, кнопки наряда и фото результата. Регистрируется РАНЬШЕ
+// приветствия и /start, иначе «/start inv_…» перехватит обычное меню, а фото — «Не понял сообщение».
 if (executorDeps) {
   registerExecutor(bot, executorDeps);
-  console.log('Исполнители в боте включены');
+  console.log(
+    `Исполнители в боте включены${executorDeps.photosDir ? `, фото — в ${executorDeps.photosDir}` : ', приём фото выключен (нет PHOTOS_DIR)'}`,
+  );
 } else {
   console.warn(
     'Исполнители выключены: не заданы DATABASE_URL, USER_ID_ENC_KEY или USER_HASH_SECRET',
