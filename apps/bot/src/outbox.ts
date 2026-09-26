@@ -80,6 +80,8 @@ export function notificationText(p: Payload): string {
       return `Исполнитель${p.nameShort ? ` ${p.nameShort}` : ''} приступил к работе по заявке ${no}.`;
     case 'executor_declined':
       return `Исполнитель${p.nameShort ? ` ${p.nameShort}` : ''} отказался от заявки ${no}. Назначьте другого в кабинете диспетчера.`;
+    case 'photo_after':
+      return `Исполнитель${p.nameShort ? ` ${p.nameShort}` : ''} прислал фото результата по заявке ${no}.`;
     default:
       return `Заявка ${no} обновлена. Подробности — в приложении.`;
   }
