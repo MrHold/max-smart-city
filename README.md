@@ -341,6 +341,20 @@ docker compose down -v        # удалить всё, включая БД, фо
 **Бот с настоящим токеном — только один экземпляр.** Режим polling при старте снимает подписку webhook:
 локальный запуск отключит бота на сервере.
 
+### Резервные копии (сервер)
+
+Каждую ночь cron запускает `scripts/backup-db.sh`: копия базы (`db-*.dump`) и фото (`photos-*.tar.gz`)
+в `/var/backups/msc`, хранятся 14 дней. Журнал — `/var/log/msc-backup.log`.
+
+```bash
+scripts/backup-db.sh                                        # копия прямо сейчас
+ls -lh /var/backups/msc                                     # какие копии есть
+scripts/restore-db.sh /var/backups/msc/db-ГГГГММДД-ЧЧММ.dump  # восстановить (спросит подтверждение)
+```
+
+Копии лежат на том же сервере. Если сервер пропадёт целиком, пропадут и они — время от времени
+скачивайте свежую к себе: `scp root@<сервер>:/var/backups/msc/db-*.dump .`
+
 ### Мини-приложение как образ
 
 `apps/miniapp/Dockerfile` собирает статику и кладёт её в `caddy:2-alpine` с `apps/miniapp/Caddyfile`:
