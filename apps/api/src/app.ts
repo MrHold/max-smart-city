@@ -42,7 +42,24 @@ const isDemoClock = (clock: Clock): clock is DemoClock =>
 
 export function buildApp(opts: AppOptions) {
   const app = Fastify({
-    logger: opts.logger ?? false,
+    logger: opts.logger
+      ? {
+          // Адрес запроса пишем без параметров после «?»: там бывают подписи ссылок (sig) и другие секреты
+          serializers: {
+            req: (req: {
+              method?: string;
+              url?: string;
+              headers?: { host?: string };
+              ip?: string;
+            }) => ({
+              method: req.method,
+              url: req.url?.split('?')[0],
+              host: req.headers?.host,
+              remoteAddress: req.ip,
+            }),
+          },
+        }
+      : false,
     bodyLimit: 1024 * 1024,
   });
 
