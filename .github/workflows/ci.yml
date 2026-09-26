@@ -1,0 +1,57 @@
+# Проверка каждого PR и каждого коммита в master.
+# Красный крестик в PR — что-то сломано, мержить нельзя.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  check:
+    name: Стиль, типы, тесты, сборка мини-приложения
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Настоящий Postgres для тестов API: без TEST_DATABASE_URL они пропускаются
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: msc
+          POSTGRES_PASSWORD: msc
+          POSTGRES_DB: msc_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U msc -d msc_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgres://msc:msc@localhost:5432/msc_test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @msc/miniapp build
+
+  docker:
+    name: Сборка Docker-образов
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Образ api / bot / migrate
+        run: docker build -t msc-app .
+      - name: Образ web (Caddy + мини-приложение)
+        run: docker build -f apps/miniapp/Dockerfile -t msc-web .
