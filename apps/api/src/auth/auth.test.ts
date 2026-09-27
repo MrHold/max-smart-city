@@ -57,6 +57,29 @@ describe('validateInitData', () => {
     const initData = signInitData({ auth_date: authDate }, TOKEN);
     expect(validateInitData(initData, TOKEN, now)).toEqual({ ok: false, reason: 'no_user' });
   });
+
+  it('принимает данные, где пробел закодирован как «+» (так кодируют часть клиентов)', () => {
+    const spaced = JSON.stringify({ id: 423207517, first_name: 'Анна Мария' });
+    // signInitData кодирует пробел как %20; меняем на «+», как в кодировании веб-форм
+    const withPlus = signInitData({ auth_date: authDate, user: spaced }, TOKEN).replace(
+      /%20/g,
+      '+',
+    );
+    expect(withPlus).toContain('+');
+    const res = validateInitData(withPlus, TOKEN, now);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.user.first_name).toBe('Анна Мария');
+  });
+
+  it('второй способ раскодирования не пропускает подделку', () => {
+    const spaced = JSON.stringify({ id: 423207517, first_name: 'Анна Мария' });
+    const withPlus = signInitData({ auth_date: authDate, user: spaced }, TOKEN).replace(
+      /%20/g,
+      '+',
+    );
+    const forged = withPlus.replace('423207517', '1');
+    expect(validateInitData(forged, TOKEN, now)).toEqual({ ok: false, reason: 'bad_signature' });
+  });
 });
 
 describe('identity', () => {

@@ -38,6 +38,16 @@ export function makeAuthenticate(deps: { db: Db; config: AuthConfig; clock: Cloc
 
     const result = validateInitData(initData, config.botToken, clock.now(), config.maxAgeSec);
     if (!result.ok) {
+      // В лог — только почему не прошло и какие поля пришли, без значений: initData — пропуск на час
+      req.log.warn(
+        {
+          reason: result.reason,
+          fields: initData.split('&').map((part) => part.split('=')[0]),
+          length: initData.length,
+          hasPlus: initData.includes('+'),
+        },
+        'initData не прошла проверку',
+      );
       if (result.reason === 'expired') {
         throw unauthorized(
           'init_data_expired',

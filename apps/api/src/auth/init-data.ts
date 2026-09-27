@@ -23,17 +23,21 @@ export type InitDataResult =
   | { ok: true; data: InitData }
   | { ok: false; reason: 'malformed' | 'bad_signature' | 'expired' | 'no_user' };
 
-/** Разбор строки key1=value1&key2=value2 с URL-декодированием значений (как в документации MAX). */
-function parse(initData: string): Map<string, string[]> | null {
+/**
+ * Разбор строки key1=value1&key2=value2 с URL-декодированием значений (как в документации MAX).
+ * plusAsSpace — считать «+» пробелом (кодирование веб-форм): так кодируют часть клиентов.
+ */
+function parse(initData: string, plusAsSpace: boolean): Map<string, string[]> | null {
   const fields = new Map<string, string[]>();
   for (const part of initData.split('&')) {
     if (part === '') continue;
     const eq = part.indexOf('=');
     if (eq <= 0) return null;
     const key = part.slice(0, eq);
+    const encoded = part.slice(eq + 1);
     let value: string;
     try {
-      value = decodeURIComponent(part.slice(eq + 1));
+      value = decodeURIComponent(plusAsSpace ? encoded.replace(/\+/g, ' ') : encoded);
     } catch {
       return null;
     }
@@ -69,7 +73,25 @@ export function validateInitData(
   now: Date,
   maxAgeSec = 3600,
 ): InitDataResult {
-  const parsed = parse(initData);
+  const first = check(initData, botToken, now, maxAgeSec, false);
+  // Одни клиенты кодируют пробел как %20, другие — как «+» (стиль веб-форм). Подпись MAX считается
+  // от раскодированных значений, поэтому при несовпадении пробуем второй вариант. Подпись всё равно
+  // обязана сойтись — это не ослабляет проверку.
+  if (!first.ok && first.reason === 'bad_signature' && initData.includes('+')) {
+    return check(initData, botToken, now, maxAgeSec, true);
+  }
+  return first;
+}
+
+/** Одна попытка проверки при заданном способе раскодирования. */
+function check(
+  initData: string,
+  botToken: string,
+  now: Date,
+  maxAgeSec: number,
+  plusAsSpace: boolean,
+): InitDataResult {
+  const parsed = parse(initData, plusAsSpace);
   if (!parsed) return { ok: false, reason: 'malformed' };
 
   const fields: Record<string, string> = {};
