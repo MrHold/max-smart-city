@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   type DispatcherAction,
   useDispatcherAction,
@@ -38,6 +39,8 @@ function RejectForm({ ids, act }: { ids: string[]; act: Act }) {
       <textarea
         className="textarea"
         rows={3}
+        maxLength={500}
+        aria-label="Причина отклонения"
         placeholder="Причина: жители увидят её в заявке"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
@@ -162,11 +165,17 @@ function AssignForm({ c, act }: { c: ClusterCard; act: Act }) {
 function CompleteForm({ c, act }: { c: ClusterCard; act: Act }) {
   const upload = useUploadPhoto();
   const [photos, setPhotos] = useState<Array<{ key: string; url: string }>>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const onPhoto = async (files: FileList | null) => {
     const f = files?.[0];
     if (!f || photos.length >= 5) return;
-    const r = await upload.mutateAsync(f);
-    setPhotos((p) => [...p, r]);
+    setPhotoError(null);
+    try {
+      const r = await upload.mutateAsync(f);
+      setPhotos((p) => [...p, r]);
+    } catch (e) {
+      setPhotoError((e as Error).message);
+    }
   };
   return (
     <Card className="card__section">
@@ -178,9 +187,7 @@ function CompleteForm({ c, act }: { c: ClusterCard; act: Act }) {
             <div className="muted num">Визит {fmtDateTime(c.executor.plannedAt)}</div>
           )}
         </div>
-      ) : (
-        <div className="muted">Назначен</div>
-      )}
+      ) : null}
       <div className="stack-8">
         <div className="field__label">Фото после работ</div>
         <div className="photos">
@@ -203,6 +210,10 @@ function CompleteForm({ c, act }: { c: ClusterCard; act: Act }) {
           )}
         </div>
       </div>
+      {photoError && <div className="field__error">{photoError}</div>}
+      {photos.length === 0 && (
+        <div className="hint">Без фото жителю нечего проверять: добавьте хотя бы одно.</div>
+      )}
       <Button
         size="lg"
         loading={act.isPending}
@@ -353,6 +364,18 @@ export function ClusterPanel({
       {act.data && <ResultNote r={act.data} />}
       {act.isError && <div className="field__error">{act.error.message}</div>}
       <Actions c={c} act={act} />
+
+      <Card className="card__section">
+        <div className="eyebrow">Заявки жителей</div>
+        <div className="row wrap" style={{ gap: 8 }}>
+          {c.requestIds.map((id, i) => (
+            <Link key={id} to={`/requests/${id}`} className="btn btn--secondary btn--sm">
+              Заявка {i + 1}
+            </Link>
+          ))}
+        </div>
+        <div className="hint">Описание, замер и фото жителя — в карточке каждой заявки.</div>
+      </Card>
     </div>
   );
 }

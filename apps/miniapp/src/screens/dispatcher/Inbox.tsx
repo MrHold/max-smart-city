@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useDispatcherInbox, useMe } from '../../api/hooks';
 import type { ClusterCard, DispatcherInbox as Inbox } from '../../api/types';
+import { useBackButton } from '../../bridge/back';
 import { demoClock, useDemoOffset } from '../../clock';
-import { fmtDate, plural } from '../../lib/format';
+import { fmtDuration, plural } from '../../lib/format';
 import { useMediaQuery } from '../../lib/media';
 import { statusLabel, statusTone } from '../../lib/request';
 import {
@@ -31,10 +32,13 @@ const workStatuses: ClusterCard['status'][] = [
   'reopened',
 ];
 
+/** В кабинете «новая», а не «отправлена»: диспетчер смотрит на входящие, а не отправляет. */
+const cabinetStatus = (s: ClusterCard['status']) => (s === 'new' ? 'Новая' : statusLabel[s]);
+
 function ClusterRow({ c, on }: { c: ClusterCard; on: boolean }) {
   useDemoOffset();
-  const overdue =
-    c.status !== 'done' && (c.overdue || new Date(c.dueAt).getTime() < demoClock.now().getTime());
+  const left = new Date(c.dueAt).getTime() - demoClock.now().getTime();
+  const overdue = c.status !== 'done' && (c.overdue || left < 0);
   return (
     <Link
       to={`/dispatcher/c/${encodeURIComponent(c.key)}`}
@@ -44,7 +48,7 @@ function ClusterRow({ c, on }: { c: ClusterCard; on: boolean }) {
         <div className="row row--between">
           <div className="list-item__title">{c.title}</div>
           <Chip xs tone={overdue ? 'danger' : statusTone[c.status]}>
-            {overdue ? 'Срок вышел' : statusLabel[c.status]}
+            {overdue ? 'Срок вышел' : cabinetStatus(c.status)}
           </Chip>
         </div>
         <div className="list-item__sub">
@@ -53,7 +57,11 @@ function ClusterRow({ c, on }: { c: ClusterCard; on: boolean }) {
         </div>
         <div className="row row--between" style={{ fontSize: 13 }}>
           <span className={cx('num', overdue ? 'status-line--danger' : 'muted')}>
-            срок до {fmtDate(c.dueAt)}
+            {c.status === 'done'
+              ? 'ждёт подтверждения'
+              : overdue
+                ? `просрочено на ${fmtDuration(left)}`
+                : `осталось ${fmtDuration(left)}`}
           </span>
           {c.kopecks > 0 && (
             <span className="num" style={{ fontWeight: 600 }}>
@@ -89,17 +97,16 @@ function ClusterList({ inbox, selectedKey }: { inbox: Inbox; selectedKey?: strin
 
   return (
     <div className="stack">
-      <div className="stats stats--3">
+      <div className="stats">
         <Stat small value={String(fresh)} label="новых" />
         <Stat small value={String(overdue)} label="просрочено" />
-        <Stat small value={formatRub(inbox.totalKopecks)} label="цена простоя" />
+        <Stat small value={formatRub(inbox.totalKopecks)} label="цена простоя по домам" />
+        <Stat
+          small
+          value={`+${formatRub(inbox.totalPerHourKopecks)} / ч`}
+          label="растёт каждый час без ремонта"
+        />
       </div>
-      {inbox.totalPerHourKopecks > 0 && (
-        <div className="hint">
-          Каждый час без ремонта прибавляет {formatRub(inbox.totalPerHourKopecks)} к перерасчёту по
-          всем домам.
-        </div>
-      )}
       <Segmented<Filter>
         value={filter}
         onChange={setFilter}
@@ -110,7 +117,7 @@ function ClusterList({ inbox, selectedKey }: { inbox: Inbox; selectedKey?: strin
         ]}
       />
       {shown.length === 0 ? (
-        <Empty title="Пусто" text="Открытых заявок этого вида нет" />
+        <Empty title="Входящих нет" text="Открытых заявок этого вида нет" />
       ) : (
         <Card pad={false} className="list">
           {shown.map((c) => (
@@ -130,9 +137,13 @@ export function DispatcherInbox() {
   const wide = useMediaQuery('(min-width: 900px)');
   const isDispatcher = me.data?.role === 'dispatcher';
   const inbox = useDispatcherInbox(isDispatcher);
+  useBackButton(() => navigate(key || executorsTab ? '/dispatcher' : '/'));
 
   if (me.isPending) return <Loading />;
-  if (me.isError) return <ErrorView message={me.error.message} onRetry={() => void me.refetch()} />;
+  if (me.isError)
+    return (
+      <ErrorView error={me.error} message={me.error.message} onRetry={() => void me.refetch()} />
+    );
 
   if (!isDispatcher) {
     return (
@@ -181,14 +192,19 @@ export function DispatcherInbox() {
       ) : inbox.isPending ? (
         <Loading />
       ) : inbox.isError ? (
-        <ErrorView message={inbox.error.message} onRetry={() => void inbox.refetch()} />
+        <ErrorView
+          error={inbox.error}
+          message={inbox.error.message}
+          onRetry={() => void inbox.refetch()}
+        />
       ) : (
         <div className={cx('cab__grid', wide && 'cab__grid--wide')}>
           {showList && <ClusterList inbox={inbox.data} selectedKey={key} />}
           {key ? (
             <ClusterPanel
+              key={key}
               cluster={selected}
-              loading={false}
+              loading={inbox.isFetching && !selected}
               onClose={() => navigate('/dispatcher')}
             />
           ) : (
@@ -196,7 +212,7 @@ export function DispatcherInbox() {
               <Card className="cab__panel">
                 <Empty
                   title="Выберите заявку"
-                  text="Слева входящие по причинам: одна авария в доме — одна строка"
+                  text="Заявки сгруппированы по проблеме: одна авария в доме — одна строка"
                 />
               </Card>
             )
