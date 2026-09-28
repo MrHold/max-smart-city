@@ -196,6 +196,16 @@ suite('заявки', () => {
     expect(other.id).not.toBe(heating.id);
   });
 
+  it('отклонённая заявка не мешает подать новую той же категории', async () => {
+    const rejected = await createRequest();
+    await db.update(requests).set({ status: 'rejected' }).where(eq(requests.id, rejected.id));
+
+    const res = await call('POST', '/api/requests', AUTHOR, newRequest());
+    const created = RequestDetailSchema.parse(res.json());
+    // Заявку по прежней (отклонённой) причине нечего возвращать молча — это новый случай.
+    expect(created.id).not.toBe(rejected.id);
+  });
+
   it('заявка соседа дублем не считается', async () => {
     const mine = await createRequest();
     const res = await call('POST', '/api/requests', NEIGHBOUR, newRequest());
@@ -266,6 +276,21 @@ suite('заявки', () => {
       const created = await createRequest();
       const res = await join(STRANGER, 'кв. 7')(created.id);
       expect(res.statusCode).toBe(403);
+    });
+
+    it('присоединившемуся соседу не отдаётся ссылка на чужое заявление', async () => {
+      const created = await createRequest();
+      expect(created.claim.available).toBe(true);
+      expect(created.claim.url).toContain('sig=');
+
+      await join(NEIGHBOUR)(created.id);
+      const res = await call('GET', `/api/requests/${created.id}`, NEIGHBOUR);
+      const detail = RequestDetailSchema.parse(res.json());
+
+      // Сумма и её наличие видны — заявитель хочет, чтобы соседи знали масштаб.
+      expect(detail.claim.available).toBe(true);
+      // Но рабочей ссылки, которую можно открыть без входа автора, у соседа быть не должно.
+      expect(detail.claim.url).toBeNull();
     });
   });
 

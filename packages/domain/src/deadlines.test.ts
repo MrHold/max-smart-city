@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type DeadlineContext, dueAt, hoursLeft, isOverdue } from './deadlines';
+import { type DeadlineContext, dueAt, hoursLeft } from './deadlines';
 import type { DeadlineRule, WorkCalendar } from './regions/schema';
 
 const calendar: WorkCalendar = {
@@ -87,17 +87,10 @@ describe('рабочий срок', () => {
   });
 });
 
-describe('просрочка', () => {
+describe('остаток времени', () => {
   const due = at('2026-11-08T12:00:00Z');
 
-  it('ровно в момент срока ещё не просрочено', () => {
-    expect(isOverdue(due, at('2026-11-08T12:00:00Z'))).toBe(false);
-  });
-
-  it('через минуту после срока просрочено', () => {
-    expect(isOverdue(due, at('2026-11-08T12:01:00Z'))).toBe(true);
-  });
-
+  // Проверку «просрочено ли» см. workflow.test.ts: там isOverdue учитывает endedAt.
   it('остаток времени считается со знаком', () => {
     expect(hoursLeft(due, at('2026-11-08T10:00:00Z'))).toBe(2);
     expect(hoursLeft(due, at('2026-11-08T15:00:00Z'))).toBe(-3);

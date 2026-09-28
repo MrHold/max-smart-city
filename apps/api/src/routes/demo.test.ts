@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { createDb, parseEncKey, runMigrations, sql } from '@msc/db';
+import { createDb, eq, parseEncKey, requests, runMigrations, sql } from '@msc/db';
 import { DemoClockStateSchema, RequestDetailSchema } from '@msc/domain';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app';
@@ -145,6 +145,22 @@ suite('демо-часы', () => {
     expect((await detail(created.id)).overdue).toBe(true);
   });
 
+  it('работу закрыли в срок — заявка не становится просроченной, пока ждёт подтверждения', async () => {
+    const created = await createRequest();
+    // Исполнитель отметил «Выполнено» до истечения срока.
+    await db
+      .update(requests)
+      .set({ status: 'done', endedAt: clock.now() })
+      .where(eq(requests.id, created.id));
+
+    // Перематываем далеко за dueAt: житель просто не успел подтвердить.
+    await call('POST', '/api/demo/clock', { shiftHours: 10 });
+    const after = await detail(created.id);
+
+    expect(after.overdue).toBe(false);
+    expect(after.gji.available).toBe(false);
+  });
+
   it('перемотка открывает шаг в ГЖИ', async () => {
     const created = await createRequest();
     expect(created.gji.available).toBe(false);
@@ -278,6 +294,18 @@ suite('демо-часы', () => {
     // Обычное чтение времени проверку не запускает.
     await call('GET', '/api/demo/clock');
     expect(shifts).toBe(before + 1);
+  });
+
+  it('сброс демо-часов назад не возвращает заявку из будущего как дубль', async () => {
+    // Заявка создана «в будущем» относительно текущего момента (после перемотки вперёд).
+    await call('POST', '/api/demo/clock', { shiftHours: 5 });
+    const future = await createRequest();
+
+    // Часы сброшены к настоящему: с этой точки зрения future.createdAt ещё не наступил.
+    await call('POST', '/api/demo/clock', { reset: true });
+    const created = await createRequest();
+
+    expect(created.id).not.toBe(future.id);
   });
 
   it('вне демо-режима маршрутов нет', async () => {

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { createDb, parseEncKey, runMigrations, sql, verifyInvite } from '@msc/db';
+import { createDb, eq, parseEncKey, photos, runMigrations, sql, verifyInvite } from '@msc/db';
 import { DispatcherInboxSchema, ExecutorSchema, RequestDetailSchema } from '@msc/domain';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app';
@@ -53,6 +53,33 @@ suite('кабинет диспетчера', () => {
 
   const bind = (initData: string, houseId: string, apartmentLabel: string) =>
     call('POST', '/api/me/house', initData, { houseId, apartmentLabel });
+
+  /** Загружает тестовый PNG от имени initData и возвращает его ключ хранения. */
+  const uploadPhoto = async (initData: string) => {
+    const boundary = '----msc-test-boundary';
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="thermo.png"\r\nContent-Type: image/png\r\n\r\n`,
+      ),
+      png,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/photos',
+      headers: {
+        'x-init-data': initData,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: body,
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    return res.json().key as string;
+  };
 
   const createRequest = async (initData: string, category = 'heating') => {
     const res = await call('POST', '/api/requests', initData, {
@@ -339,6 +366,55 @@ suite('кабинет диспетчера', () => {
     expect(after.clusters).toHaveLength(1);
     expect(after.clusters[0]?.status).toBe('reopened');
     expect(after.clusters[0]?.overdue).toBe(false);
+  });
+
+  it('нельзя прикрепить фото, загруженное другим человеком и ещё не привязанное к заявке', async () => {
+    const created = await createRequest(RESIDENT);
+    const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
+    await call('POST', '/api/dispatcher/assign', DISPATCHER, {
+      requestIds: [created.id],
+      executorId: executors[0].id,
+    });
+
+    // RESIDENT загрузил фото для своей будущей заявки — оно ещё ни к чему не привязано.
+    const strangersPhoto = await uploadPhoto(RESIDENT);
+
+    const res = await call('POST', '/api/dispatcher/complete', DISPATCHER, {
+      requestIds: [created.id],
+      photoKeys: [strangersPhoto],
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().updated).toBe(1);
+
+    // Заявка закрылась, но чужое фото угнать по ключу не удалось.
+    const row = await db
+      .select({ requestId: photos.requestId, stage: photos.stage })
+      .from(photos)
+      .where(eq(photos.storageKey, strangersPhoto));
+    expect(row[0]?.requestId).toBeNull();
+    expect(row[0]?.stage).toBe('before');
+  });
+
+  it('своё фото диспетчер прикрепляет как обычно', async () => {
+    const created = await createRequest(RESIDENT);
+    const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
+    await call('POST', '/api/dispatcher/assign', DISPATCHER, {
+      requestIds: [created.id],
+      executorId: executors[0].id,
+    });
+
+    const ownPhoto = await uploadPhoto(DISPATCHER);
+    await call('POST', '/api/dispatcher/complete', DISPATCHER, {
+      requestIds: [created.id],
+      photoKeys: [ownPhoto],
+    });
+
+    const row = await db
+      .select({ requestId: photos.requestId, stage: photos.stage })
+      .from(photos)
+      .where(eq(photos.storageKey, ownPhoto));
+    expect(row[0]?.requestId).toBe(created.id);
+    expect(row[0]?.stage).toBe('after');
   });
 
   it('отклонение требует причины', async () => {

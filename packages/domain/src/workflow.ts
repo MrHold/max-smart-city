@@ -51,12 +51,27 @@ export interface EscalationInput {
   now: Date;
   /** Есть ли посчитанная сумма перерасчёта. */
   hasLiability: boolean;
+  /**
+   * Когда работа фактически завершена (исполнитель отметил «Выполнено»), null — ещё не завершена.
+   * Если работу закрыли в срок, дальнейшая перемотка часов не должна задним числом делать
+   * заявку просроченной: часы для просрочки останавливаются в момент завершения.
+   */
+  endedAt: Date | null;
 }
 
 export interface Escalation {
   claim: { available: boolean };
   gji: { available: boolean; afterAt: string | null };
 }
+
+/**
+ * Просрочен ли срок ответа. Пока работа не завершена, сравниваем с текущим моментом —
+ * обычный «тикающий» таймер. После завершения сравниваем с моментом завершения: если
+ * исполнитель закрыл заявку в срок, она не станет просроченной позже, сколько бы времени
+ * ни прошло до подтверждения жителем.
+ */
+export const isOverdue = (dueAt: Date, now: Date, endedAt: Date | null): boolean =>
+  (endedAt ?? now).getTime() > dueAt.getTime();
 
 /**
  * Какие шаги открыты жителю.
@@ -67,7 +82,7 @@ export interface Escalation {
  */
 export function escalation(input: EscalationInput): Escalation {
   const closed = isClosed(input.status);
-  const overdue = input.now.getTime() > input.dueAt.getTime();
+  const overdue = isOverdue(input.dueAt, input.now, input.endedAt);
 
   return {
     claim: { available: input.hasLiability && input.status !== 'rejected' },

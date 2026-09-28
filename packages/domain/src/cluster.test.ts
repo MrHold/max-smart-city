@@ -10,6 +10,7 @@ const req = (over: Partial<ClusterableRequest> & { id: string }): ClusterableReq
   status: 'accepted' as RequestStatus,
   startedAt: new Date('2026-11-10T06:00:00Z'),
   dueAt: new Date('2026-11-10T08:00:00Z'),
+  endedAt: null,
   joinersCount: 0,
   houseKopecks: 6496,
   perHourHouseKopecks: 1082,
@@ -106,5 +107,38 @@ describe('кластеры', () => {
 
   it('пустой список не ломается', () => {
     expect(cluster([], now)).toEqual([]);
+  });
+
+  it('работу закрыли в срок — заявка не просрочена, даже если срок давно прошёл', () => {
+    // Статус 'done' — заявка ещё не закрыта (ждёт подтверждения жителя), но executed on time.
+    const result = cluster(
+      [
+        req({
+          id: 'a',
+          status: 'done',
+          dueAt: new Date('2026-11-10T08:00:00Z'),
+          endedAt: new Date('2026-11-10T07:30:00Z'),
+        }),
+      ],
+      now,
+    );
+    expect(result[0]?.overdue).toBe(false);
+  });
+
+  it('кластер просрочен, если просрочена хотя бы одна заявка в нём', () => {
+    const result = cluster(
+      [
+        req({
+          id: 'вовремя',
+          status: 'done',
+          dueAt: new Date('2026-11-10T08:00:00Z'),
+          endedAt: new Date('2026-11-10T07:30:00Z'),
+        }),
+        req({ id: 'просрочена', dueAt: new Date('2026-11-10T08:00:00Z') }),
+      ],
+      now,
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]?.overdue).toBe(true);
   });
 });
