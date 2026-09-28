@@ -24,6 +24,14 @@ export type InitDataResult =
   | { ok: false; reason: 'malformed' | 'bad_signature' | 'expired' | 'no_user' };
 
 /**
+ * Насколько auth_date может опережать часы сервера. Часы телефона и сервера
+ * расходятся на секунды — из-за этого человека выкидывать нельзя. Но подпись
+ * «из будущего» на минуты и часы вперёд — повод не верить: такая initData
+ * прожила бы дольше maxAgeSec.
+ */
+const CLOCK_SKEW_SEC = 60;
+
+/**
  * Разбор строки key1=value1&key2=value2 с URL-декодированием значений (как в документации MAX).
  * plusAsSpace — считать «+» пробелом (кодирование веб-форм): так кодируют часть клиентов.
  */
@@ -83,6 +91,13 @@ export function validateInitData(
   return first;
 }
 
+/** Похоже ли распарсенное поле user на пользователя MAX. */
+function isMaxUser(value: unknown): value is MaxUser {
+  if (typeof value !== 'object' || value === null) return false;
+  const u = value as Record<string, unknown>;
+  return Number.isSafeInteger(u.id) && (u.id as number) > 0 && typeof u.first_name === 'string';
+}
+
 /** Одна попытка проверки при заданном способе раскодирования. */
 function check(
   initData: string,
@@ -111,15 +126,18 @@ function check(
   if (!Number.isFinite(authDateSec)) return { ok: false, reason: 'malformed' };
   const ageSec = now.getTime() / 1000 - authDateSec;
   if (ageSec > maxAgeSec) return { ok: false, reason: 'expired' };
+  // Отрицательный возраст — подпись «из будущего». Это та же ошибка окна времени,
+  // что и просрочка, поэтому причина та же: человеку в обоих случаях — перезапустить приложение.
+  if (ageSec < -CLOCK_SKEW_SEC) return { ok: false, reason: 'expired' };
 
   if (!fields.user) return { ok: false, reason: 'no_user' };
-  let user: MaxUser;
+  let user: unknown;
   try {
-    user = JSON.parse(fields.user) as MaxUser;
+    user = JSON.parse(fields.user);
   } catch {
     return { ok: false, reason: 'malformed' };
   }
-  if (typeof user.id !== 'number') return { ok: false, reason: 'no_user' };
+  if (!isMaxUser(user)) return { ok: false, reason: 'no_user' };
 
   return {
     ok: true,
