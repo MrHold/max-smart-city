@@ -4,16 +4,24 @@ import type { Executor } from '../../api/types';
 import { ensureWebApp } from '../../bridge';
 
 /** Ссылка-приглашение в бот: пока исполнитель её не открыл, наряды до него не дойдут. */
-export function InviteLink({ executor }: { executor: Executor }) {
+export function InviteLink({
+  executor,
+  buttons = false,
+}: {
+  executor: Executor;
+  /** Отдельной кнопкой на своей строке (список исполнителей), а не ссылкой в тексте. */
+  buttons?: boolean;
+}) {
   const invite = useExecutorInvite();
   const [copied, setCopied] = useState(false);
+  const cls = buttons ? 'btn btn--secondary btn--sm' : 'link-btn';
 
   if (!invite.data) {
     return (
       <span className="row wrap" style={{ gap: 8 }}>
         <button
           type="button"
-          className="link-btn"
+          className={cls}
           disabled={invite.isPending}
           onClick={(e) => {
             e.preventDefault();
@@ -46,7 +54,7 @@ export function InviteLink({ executor }: { executor: Executor }) {
     <span className="row wrap" style={{ gap: 8 }}>
       <button
         type="button"
-        className="link-btn"
+        className={cls}
         onClick={(e) => {
           e.preventDefault();
           void copy();
@@ -56,7 +64,7 @@ export function InviteLink({ executor }: { executor: Executor }) {
       </button>
       <button
         type="button"
-        className="link-btn"
+        className={cls}
         onClick={(e) => {
           e.preventDefault();
           share();
