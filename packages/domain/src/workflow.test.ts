@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canTransition, escalation, isClosed, TransitionError, transition } from './workflow';
+import {
+  canTransition,
+  escalation,
+  isClosed,
+  isOverdue,
+  TransitionError,
+  transition,
+} from './workflow';
 
 describe('переходы', () => {
   it('обычный путь заявки', () => {
@@ -54,6 +61,29 @@ describe('переходы', () => {
   });
 });
 
+describe('просрочка', () => {
+  const due = new Date('2026-11-08T12:00:00Z');
+  const at = (iso: string) => new Date(iso);
+
+  it('ровно в момент срока ещё не просрочено', () => {
+    expect(isOverdue(due, at('2026-11-08T12:00:00Z'), null)).toBe(false);
+  });
+
+  it('через минуту после срока просрочено', () => {
+    expect(isOverdue(due, at('2026-11-08T12:01:00Z'), null)).toBe(true);
+  });
+
+  it('работу закрыли в срок — дальнейшая перемотка часов не делает её просроченной', () => {
+    const endedAt = at('2026-11-08T11:00:00Z');
+    expect(isOverdue(due, at('2026-12-01T00:00:00Z'), endedAt)).toBe(false);
+  });
+
+  it('работу закрыли с опозданием — это зафиксировано навсегда', () => {
+    const endedAt = at('2026-11-08T13:00:00Z');
+    expect(isOverdue(due, at('2026-12-01T00:00:00Z'), endedAt)).toBe(true);
+  });
+});
+
 describe('эскалация', () => {
   const dueAt = new Date('2026-11-09T12:00:00Z');
 
@@ -63,6 +93,7 @@ describe('эскалация', () => {
       dueAt,
       now: new Date('2026-11-09T10:00:00Z'),
       hasLiability: true,
+      endedAt: null,
     });
     expect(steps.gji.available).toBe(false);
     expect(steps.gji.afterAt).toBe(dueAt.toISOString());
@@ -74,8 +105,20 @@ describe('эскалация', () => {
       dueAt,
       now: new Date('2026-11-09T12:30:00Z'),
       hasLiability: true,
+      endedAt: null,
     });
     expect(steps.gji.available).toBe(true);
+  });
+
+  it('работу выполнили в срок — жалоба не открывается, даже если жителя долго не спрашивали', () => {
+    const steps = escalation({
+      status: 'done',
+      dueAt,
+      now: new Date('2026-11-20T00:00:00Z'),
+      hasLiability: false,
+      endedAt: new Date('2026-11-09T11:00:00Z'),
+    });
+    expect(steps.gji.available).toBe(false);
   });
 
   it('у закрытой заявки эскалации нет', () => {
@@ -84,6 +127,7 @@ describe('эскалация', () => {
       dueAt,
       now: new Date('2026-11-20T00:00:00Z'),
       hasLiability: true,
+      endedAt: null,
     });
     expect(steps.gji.available).toBe(false);
     expect(steps.gji.afterAt).toBeNull();
@@ -95,12 +139,14 @@ describe('эскалация', () => {
       dueAt,
       now: dueAt,
       hasLiability: true,
+      endedAt: null,
     });
     const without = escalation({
       status: 'done',
       dueAt,
       now: dueAt,
       hasLiability: false,
+      endedAt: null,
     });
     expect(withMoney.claim.available).toBe(true);
     expect(without.claim.available).toBe(false);
@@ -112,6 +158,7 @@ describe('эскалация', () => {
       dueAt,
       now: dueAt,
       hasLiability: true,
+      endedAt: null,
     });
     expect(steps.claim.available).toBe(false);
   });

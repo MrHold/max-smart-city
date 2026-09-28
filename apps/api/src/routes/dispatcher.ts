@@ -9,10 +9,10 @@ import {
   houses,
   inArray,
   inviteToken,
+  isNull,
   joins,
   measurements as measurementsTable,
   memberships,
-  ne,
   photos,
   requestEvents,
   requests,
@@ -229,6 +229,7 @@ export const dispatcherRoutes =
         status: r.status as RequestStatus,
         startedAt: r.startedAt,
         dueAt: r.dueAt,
+        endedAt: r.endedAt,
         joinersCount: joinRows.filter((j) => j.requestId === r.id).length,
         houseKopecks: money.get(r.id)?.kopecks ?? 0,
         perHourHouseKopecks: money.get(r.id)?.perHourKopecks ?? 0,
@@ -568,12 +569,26 @@ export const dispatcherRoutes =
         (row) => ({ type: 'completed', requestId: row.id, number: row.number }),
       );
 
-      // Фото «после» прикрепляются ко всем заявкам кластера: работа одна на всех.
-      if (photoKeys.length > 0) {
+      // Фото «после» прикрепляются к первой заявке кластера, которая реально закрылась:
+      // requestIds[0] мог быть пропущен в bulk() (чужой дом, недопустимый переход),
+      // и тогда фото ушло бы на заявку, которую только что отклонили как чужую.
+      const skippedIds = new Set(result.skipped.map((s) => s.requestId));
+      const attachTo = requestIds.find((id) => !skippedIds.has(id));
+
+      if (photoKeys.length > 0 && attachTo) {
         await db
           .update(photos)
-          .set({ requestId: requestIds[0] as string, stage: 'after' })
-          .where(and(inArray(photos.storageKey, photoKeys), ne(photos.stage, 'after')));
+          .set({ requestId: attachTo, stage: 'after' })
+          .where(
+            and(
+              inArray(photos.storageKey, photoKeys),
+              // Только свежезагруженные фото самого исполнителя: без этого условия
+              // по угаданному или подсмотренному ключу можно было перепривязать
+              // чужую фотографию, уже прикреплённую к другой заявке.
+              eq(photos.uploadedBy, userId),
+              isNull(photos.requestId),
+            ),
+          );
       }
 
       return result;

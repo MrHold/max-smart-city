@@ -1,5 +1,5 @@
 import type { RequestStatus } from './contracts';
-import { isClosed } from './workflow';
+import { isClosed, isOverdue } from './workflow';
 
 /**
  * Одна авария рождает десятки одинаковых заявок. Диспетчеру нужна одна строка
@@ -13,6 +13,8 @@ export interface ClusterableRequest {
   status: RequestStatus;
   startedAt: Date;
   dueAt: Date;
+  /** Когда работа завершена; null — ещё нет. Влияет на просрочку так же, как в escalation(). */
+  endedAt: Date | null;
   /** Сколько соседей присоединилось к этой заявке. */
   joinersCount: number;
   /** Оценка снижения платы по квартирам этой заявки, в копейках. */
@@ -58,6 +60,10 @@ export function cluster(requests: ClusterableRequest[], now: Date, options: Clus
   const clusters: Cluster[] = [];
 
   for (const request of open) {
+    // Своя просрочка у каждой заявки: если работу закрыли в срок, дальнейшая перемотка
+    // часов не делает её просроченной задним числом (см. isOverdue в workflow.ts).
+    const requestOverdue = isOverdue(request.dueAt, now, request.endedAt);
+
     const existing = clusters.find(
       (c) =>
         c.houseId === request.houseId &&
@@ -71,6 +77,8 @@ export function cluster(requests: ClusterableRequest[], now: Date, options: Clus
       existing.kopecks += request.houseKopecks;
       existing.perHourKopecks += request.perHourHouseKopecks;
       if (request.dueAt.getTime() < existing.dueAt.getTime()) existing.dueAt = request.dueAt;
+      // Кластер просрочен, если просрочена хотя бы одна заявка в нём.
+      if (requestOverdue) existing.overdue = true;
       continue;
     }
 
@@ -82,13 +90,11 @@ export function cluster(requests: ClusterableRequest[], now: Date, options: Clus
       apartments: 1 + request.joinersCount,
       startedAt: request.startedAt,
       dueAt: request.dueAt,
-      overdue: false,
+      overdue: requestOverdue,
       kopecks: request.houseKopecks,
       perHourKopecks: request.perHourHouseKopecks,
     });
   }
-
-  for (const c of clusters) c.overdue = now.getTime() > c.dueAt.getTime();
 
   return clusters.sort((a, b) => {
     if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;

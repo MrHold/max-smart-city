@@ -45,7 +45,8 @@ export function dueAt(startedAt: Date, rule: DeadlineRule, ctx: DeadlineContext)
   );
 }
 
-export const isOverdue = (due: Date, now: Date): boolean => now.getTime() > due.getTime();
+// Проверку «просрочено ли» см. isOverdue в workflow.ts: там же учитывается endedAt —
+// заявка, закрытая в срок, не должна задним числом становиться просроченной.
 
 /** Сколько осталось до срока. Отрицательное значение — на столько просрочено. */
 export const hoursLeft = (due: Date, now: Date): number =>

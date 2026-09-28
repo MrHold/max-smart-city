@@ -11,9 +11,11 @@ import {
   houses,
   inArray,
   joins,
+  lte,
   measurements as measurementsTable,
   memberships,
   nextRequestNumber,
+  notInArray,
   photos,
   requestEvents,
   requests,
@@ -24,6 +26,7 @@ import {
   dueAt as computeDueAt,
   escalation,
   isClosed,
+  isOverdue,
   JoinInputSchema,
   type Location,
   type Measurement,
@@ -238,6 +241,7 @@ async function buildDetail(
     dueAt: row.dueAt,
     now,
     hasLiability: (liability?.apartmentKopecks ?? 0) > 0,
+    endedAt: row.endedAt,
   });
 
   const isAuthor = row.authorUserId === viewerUserId;
@@ -252,7 +256,7 @@ async function buildDetail(
     status,
     createdAt: row.createdAt.toISOString(),
     dueAt: row.dueAt.toISOString(),
-    overdue: !isClosed(status) && now.getTime() > row.dueAt.getTime(),
+    overdue: !isClosed(status) && isOverdue(row.dueAt, now, row.endedAt),
     locationText: locationText(row.location as Location),
     joinersCount: joinRows.length,
     service: category.service ?? null,
@@ -287,9 +291,13 @@ async function buildDetail(
     shareUrl: shareUrlFor(row.id),
     claim: {
       available: steps.claim.available,
-      // Ссылка подписана и живёт ограниченное время: мини-приложение открывает её
-      // обычным переходом, а браузер не отправляет заголовок с данными входа.
-      url: steps.claim.available ? signedDocumentPath(row.id, 'claim', now, secret) : null,
+      // Ссылка подписана и живёт ограниченное время, а подпись сама по себе не завязана
+      // на конкретного пользователя — без проверки isAuthor карточка отдала бы рабочую
+      // ссылку на заявление любому соседу, который просто открыл ту же заявку.
+      // Мини-приложение открывает её обычным переходом, поэтому браузер не отправляет
+      // заголовок с данными входа, и подпись остаётся единственной проверкой при скачивании.
+      url:
+        steps.claim.available && isAuthor ? signedDocumentPath(row.id, 'claim', now, secret) : null,
     },
     gji: steps.gji,
   };
@@ -309,7 +317,7 @@ const toSummary = (
   status: row.status as RequestStatus,
   createdAt: row.createdAt.toISOString(),
   dueAt: row.dueAt.toISOString(),
-  overdue: !isClosed(row.status as RequestStatus) && now.getTime() > row.dueAt.getTime(),
+  overdue: !isClosed(row.status as RequestStatus) && isOverdue(row.dueAt, now, row.endedAt),
   locationText: locationText(row.location as Location),
   joinersCount,
 });
@@ -428,7 +436,10 @@ export const requestsRoutes =
 
       // Двойное нажатие «Отправить» и повтор после обрыва связи не должны плодить
       // одинаковые заявки: для диспетчера это дубли в кластере, для жителя — путаница.
-      // Повтором считаем ту же категорию того же автора за последние DUPLICATE_WINDOW_MIN минут.
+      // Повтором считаем ту же категорию того же автора, поданную не раньше окна
+      // и не позже текущего момента: без верхней границы после перемотки демо-часов
+      // назад старая заявка молча становилась бы «новой» и возвращалась вместо создания.
+      // Закрытые и отклонённые заявки повторами не считаются — по ним нечего возвращать.
       const [duplicate] = await db
         .select({ id: requests.id })
         .from(requests)
@@ -437,6 +448,8 @@ export const requestsRoutes =
             eq(requests.authorUserId, userId),
             eq(requests.category, category.code),
             gte(requests.createdAt, new Date(now.getTime() - DUPLICATE_WINDOW_MS)),
+            lte(requests.createdAt, now),
+            notInArray(requests.status, ['rejected', 'confirmed']),
           ),
         )
         .limit(1);

@@ -224,6 +224,7 @@ export const documentsRoutes =
           dueAt: ctx.row.dueAt,
           now: ctx.now,
           hasLiability: (ctx.liability?.apartmentKopecks ?? 0) > 0,
+          endedAt: ctx.row.endedAt,
         });
 
         // Жалобу принимают только после того, как истёк срок ответа управляющей организации.
@@ -286,6 +287,7 @@ export const documentsRoutes =
             dueAt: ctx.row.dueAt,
             now,
             hasLiability: (ctx.liability?.apartmentKopecks ?? 0) > 0,
+            endedAt: ctx.row.endedAt,
           });
           if (!steps.gji.available) {
             throw conflict(
