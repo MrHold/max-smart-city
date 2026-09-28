@@ -30,8 +30,18 @@ export function Executors({ houseId }: { houseId: string | undefined }) {
                   {e.inBot ? 'в MAX' : 'нет в MAX'}
                 </Chip>
               </div>
-              <div className="list-item__sub">{e.categories.map(titleOf).join(', ')}</div>
-              {!e.inBot && <InviteLink executor={e} />}
+              <div className="row wrap" style={{ gap: 6 }}>
+                {e.categories.map((code) => (
+                  <Chip xs key={code}>
+                    {titleOf(code)}
+                  </Chip>
+                ))}
+              </div>
+              {!e.inBot && (
+                <div style={{ marginTop: 6 }}>
+                  <InviteLink executor={e} buttons />
+                </div>
+              )}
             </div>
           </div>
         ))}
