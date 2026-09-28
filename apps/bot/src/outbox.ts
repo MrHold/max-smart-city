@@ -1,6 +1,7 @@
 import { type Bot, Keyboard } from '@maxhub/max-bot-api';
 import { and, asc, type Db, decryptUserId, eq, outbox, sql, users } from '@msc/db';
 import { orderKeyboard } from './keyboards';
+import { formatDate, orderCard } from './order-card';
 
 const TICK_MS = 5_000; // как часто проверять очередь
 const BATCH = 25; // сколько сообщений за один проход
@@ -8,38 +9,6 @@ const GAP_MS = 40; // пауза между сообщениями: не бол�
 const MAX_ATTEMPTS = 8; // после стольких неудач — status = failed, больше не пытаемся
 
 type Payload = { type?: string; requestId?: string; number?: string; [key: string]: unknown };
-
-const formatDate = (iso: unknown): string | null => {
-  if (typeof iso !== 'string') return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString('ru-RU', {
-    timeZone: 'Europe/Moscow',
-    day: 'numeric',
-    month: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-// Названия категорий для наряда (коды — из regions/16-tatarstan/categories.yaml).
-// Незнакомый код покажем как есть, пока API не начнёт класть название в payload.
-const CATEGORY_TITLES: Record<string, string> = {
-  heating: 'Холодные батареи',
-  heating_off: 'Нет отопления',
-  hot_water: 'Горячая вода холодная',
-  hot_water_off: 'Нет горячей воды',
-  cold_water_off: 'Нет холодной воды',
-  yard_lighting: 'Освещение во дворе',
-  yard_cleaning: 'Уборка, мусор',
-  playground: 'Детская площадка',
-  entrance_light: 'Не горит свет в подъезде',
-  entrance_door: 'Дверь, домофон',
-  elevator: 'Лифт',
-  entrance_cleaning: 'Не убран подъезд',
-};
-const categoryTitle = (code: unknown): string | null =>
-  typeof code === 'string' ? (CATEGORY_TITLES[code] ?? code) : null;
 
 /**
  * Убирает user_id из текста ошибки перед записью в базу и лог.
@@ -73,20 +42,8 @@ export function notificationText(p: Payload): string {
       const n = typeof p.photos === 'number' ? p.photos : 0;
       return `Работа по заявке ${no} выполнена${n ? `, исполнитель приложил фото: ${n}` : ''}. Проверьте результат и подтвердите в приложении.`;
     }
-    case 'order': {
-      const when = formatDate(p.plannedAt);
-      const what = categoryTitle(p.categoryTitle ?? p.category);
-      const lines = [
-        `🛠 Наряд по заявке ${no}`,
-        p.address ? `Адрес: ${p.address}` : null,
-        what ? `Что: ${what}` : null,
-        typeof p.description === 'string' && p.description ? `Описание: ${p.description}` : null,
-        when ? `Плановое время: ${when}` : null,
-        '',
-        'Отметьте кнопками, когда приступите и когда закончите.',
-      ];
-      return lines.filter((line) => line !== null).join('\n');
-    }
+    case 'order':
+      return `${orderCard(p)}\n\nОтметьте кнопками, когда приступите и когда закончите.`;
     case 'auto_closed':
       return `Заявка ${no} закрыта автоматически: вы не подтвердили результат в течение ${p.afterDays ?? 3} суток. Если проблема осталась, подайте новую заявку.`;
     case 'in_progress':
