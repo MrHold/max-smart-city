@@ -27,7 +27,8 @@ import {
   type WorkflowEvent,
 } from '@msc/domain';
 import { nowFor } from './clock';
-import { finishKeyboard, orderKeyboard, photoModeKeyboard } from './keyboards';
+import { orderKeyboard, photoModeKeyboard } from './keyboards';
+import { orderCard } from './order-card';
 import { downloadImage, savePhoto } from './photo';
 
 export type Deps = {
@@ -60,6 +61,7 @@ const MAX_PHOTOS_PER_MESSAGE = 5;
 const MAX_PHOTOS_PER_REQUEST = 10;
 
 type Kb = ReturnType<typeof orderKeyboard>;
+type RequestRow = typeof requests.$inferSelect;
 type Outcome = {
   popup: string;
   reply?: string;
@@ -75,8 +77,25 @@ const NOT_LINKED: Outcome = {
   popup: 'Вы не привязаны как исполнитель. Откройте ссылку-приглашение от диспетчера.',
 };
 
+/** Сообщение бота, под которым сейчас стоят кнопки режима фото. */
+type Prompt = {
+  mid: string;
+  text: string;
+  /**
+   * true — служебный ответ («Фото добавлено…»): когда появится следующий, этот удаляем.
+   * false — бывший наряд: там адрес и время, его не удаляем, а только снимаем кнопки.
+   */
+  removable: boolean;
+};
+
 /** Режим фото: исполнитель прикладывает фото к этой заявке, пока не нажмёт «Завершить» или «Назад». */
-type PhotoSession = { requestId: string; number: string; until: number };
+type PhotoSession = { requestId: string; number: string; until: number; prompt?: Prompt };
+
+/** Как отправить ответ в чат; возвращает отправленное сообщение (нужен его mid). */
+type Send = (
+  text: string,
+  extra: { attachments: Kb[] },
+) => Promise<{ body?: { mid?: string } } | undefined>;
 
 /** users.id по MAX user_id. create — завести пользователя, если его ещё нет (как при входе в API). */
 async function userIdFor(deps: Deps, maxUserId: number, create: boolean): Promise<string | null> {
@@ -117,6 +136,32 @@ async function afterPhotos(db: DbOrTx, requestId: string): Promise<number> {
     .from(photos)
     .where(and(eq(photos.requestId, requestId), eq(photos.stage, 'after')));
   return row?.n ?? 0;
+}
+
+/**
+ * Карточка наряда по данным из базы: адрес — из дома, плановое время — из последнего
+ * события «назначен» (отдельной колонки у заявки нет; при переназначении берём новое время).
+ */
+async function orderCardFor(db: Db, row: RequestRow): Promise<string> {
+  const [house] = await db
+    .select({ address: houses.address })
+    .from(houses)
+    .where(eq(houses.id, row.houseId))
+    .limit(1);
+  const [assigned] = await db
+    .select({ payload: requestEvents.payload })
+    .from(requestEvents)
+    .where(and(eq(requestEvents.requestId, row.id), eq(requestEvents.type, 'assigned')))
+    .orderBy(sql`${requestEvents.at} desc`)
+    .limit(1);
+  const plannedAt = (assigned?.payload as { plannedAt?: unknown } | null | undefined)?.plannedAt;
+  return orderCard({
+    number: row.number,
+    address: house?.address,
+    category: row.category,
+    description: row.description,
+    plannedAt,
+  });
 }
 
 /** Привязка по приглашению: executors.user_id = этот пользователь MAX. */
@@ -246,12 +291,12 @@ async function applyAction(
   // Повтор или заявку одновременно поменял диспетчер — первое нажатие уже всё сделало
   if (!applied) return SILENT;
 
-  // Сообщение с кнопкой заменится этим текстом — номер и суть заявки оставляем
-  const header = `Заявка №${row.number}: ${row.description}`;
+  // Сообщение с кнопкой заменится этим текстом — карточку наряда (адрес, время) сохраняем
+  const card = await orderCardFor(db, row);
   if (key === 'start') {
     return {
       popup: '',
-      reply: `${header}\n\nВы приступили к работе. Когда закончите — нажмите «Выполнено».`,
+      reply: `${card}\n\n▶️ Вы приступили к работе. Когда закончите — нажмите «Выполнено».`,
       keyboard: orderKeyboard(row.id, 'in_progress'),
     };
   }
@@ -259,12 +304,12 @@ async function applyAction(
     const n = applied.photoCount;
     return {
       popup: '',
-      reply: `${header}\n\n✅ Заявка завершена${n ? `, приложено фото: ${n}` : ' без фото'}. Житель получит уведомление и подтвердит работу.`,
+      reply: `${card}\n\n✅ Заявка завершена${n ? `, приложено фото: ${n}` : ' без фото'}. Житель получит уведомление и подтвердит работу.`,
     };
   }
   return {
     popup: '',
-    reply: `${header}\n\nВы сняты с заявки. Диспетчер назначит другого исполнителя.`,
+    reply: `${card}\n\nВы сняты с заявки. Диспетчер назначит другого исполнителя.`,
   };
 }
 
@@ -281,12 +326,14 @@ async function enterPhotoMode(deps: Deps, requestId: string, maxUserId: number):
   }
 
   const already = await afterPhotos(deps.db, row.id);
+  const card = await orderCardFor(deps.db, row);
   return {
     popup: '',
     number: row.number,
     reply:
-      `Заявка №${row.number}: ${row.description}\n\n` +
-      '📷 Пришлите фото результата — одно или несколько. Когда закончите, нажмите «Завершить заявку».' +
+      `${card}\n\n` +
+      `📷 Пришлите фото результата — одно или несколько (до ${MAX_PHOTOS_PER_REQUEST}). ` +
+      'Когда закончите, нажмите «Завершить заявку».' +
       (already ? `\nУже приложено фото: ${already}.` : ''),
     keyboard: photoModeKeyboard(row.id),
   };
@@ -299,9 +346,10 @@ async function backToOrder(deps: Deps, requestId: string, maxUserId: number): Pr
   const [row] = await deps.db.select().from(requests).where(eq(requests.id, requestId)).limit(1);
   if (!row || row.executorId !== found.executor.id) return SILENT;
   if (!canTransition(row.status as RequestStatus, 'complete')) return SILENT; // уже завершена
+  const card = await orderCardFor(deps.db, row);
   return {
     popup: '',
-    reply: `Заявка №${row.number}: ${row.description}\n\nЗаявка остаётся в работе. Когда закончите — нажмите «Выполнено».`,
+    reply: `${card}\n\nЗаявка остаётся в работе. Когда закончите — нажмите «Выполнено».`,
     keyboard: orderKeyboard(row.id, row.status === 'assigned' ? 'assigned' : 'in_progress'),
   };
 }
@@ -343,7 +391,7 @@ async function savePhotos(
   const before = await afterPhotos(db, row.id);
   if (before >= MAX_PHOTOS_PER_REQUEST) {
     return {
-      text: `К заявке уже приложено ${MAX_PHOTOS_PER_REQUEST} фото — этого достаточно. Нажмите «Завершить заявку».`,
+      text: `📷 Фото: ${before} из ${MAX_PHOTOS_PER_REQUEST} — больше не нужно. Нажмите «Завершить заявку».`,
       keepSession: true,
     };
   }
@@ -387,7 +435,7 @@ async function savePhotos(
   const total = await afterPhotos(db, row.id);
   return {
     text: added
-      ? `📷 Фото добавлено (всего: ${total}). Пришлите ещё или нажмите «Завершить заявку».`
+      ? `📷 Фото: ${total} из ${MAX_PHOTOS_PER_REQUEST}. Пришлите ещё или нажмите «Завершить заявку».`
       : 'Это фото уже есть в заявке. Пришлите другое или нажмите «Завершить заявку».',
     keepSession: true,
   };
@@ -406,8 +454,51 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     sessions.delete(maxUserId);
     return undefined;
   };
-  const closeSession = (maxUserId: number, requestId: string) => {
-    if (sessions.get(maxUserId)?.requestId === requestId) sessions.delete(maxUserId);
+  /** Закрыть режим фото по этой заявке; вернуть закрытую сессию, чтобы убрать её кнопки. */
+  const closeSession = (maxUserId: number, requestId: string): PhotoSession | undefined => {
+    const s = sessions.get(maxUserId);
+    if (s?.requestId !== requestId) return undefined;
+    sessions.delete(maxUserId);
+    return s;
+  };
+
+  // Сообщения и нажатия одного исполнителя — строго по очереди. Три фото подряд иначе
+  // обработались бы одновременно, и под двумя сообщениями остались бы кнопки.
+  const queues = new Map<number, Promise<void>>();
+  const oneByOne = (maxUserId: number, job: () => Promise<void>): Promise<void> => {
+    const run = (queues.get(maxUserId) ?? Promise.resolve()).then(job);
+    const tail = run.catch(() => {});
+    queues.set(maxUserId, tail);
+    void tail.then(() => {
+      if (queues.get(maxUserId) === tail) queues.delete(maxUserId);
+    });
+    return run;
+  };
+
+  // Убрать кнопки со старого сообщения: служебное — удалить, бывший наряд — оставить без кнопок.
+  // exceptMid — сообщение, которое прямо сейчас заменяется ответом на нажатие: его не трогаем.
+  // Ошибки не страшны: сообщение могли удалить руками или оно слишком старое для правки.
+  const retire = async (prompt: Prompt | undefined, exceptMid?: string): Promise<void> => {
+    if (!prompt || prompt.mid === exceptMid) return;
+    try {
+      if (prompt.removable) await bot.api.deleteMessage(prompt.mid);
+      else await bot.api.editMessage(prompt.mid, { text: prompt.text, attachments: [] });
+    } catch (err) {
+      console.warn(
+        'Режим фото: не удалось убрать старые кнопки —',
+        err instanceof Error ? err.message : err,
+      );
+    }
+  };
+
+  // Ответ в режиме фото: новое сообщение с кнопками внизу чата, старое — убираем.
+  // Сначала отправляем новое, потом убираем старое — кнопки не пропадают ни на миг.
+  const showPrompt = async (session: PhotoSession, text: string, send: Send): Promise<void> => {
+    const sent = await send(text, { attachments: [photoModeKeyboard(session.requestId)] });
+    const old = session.prompt;
+    const mid = sent?.body?.mid;
+    session.prompt = mid ? { mid, text, removable: true } : undefined;
+    await retire(old);
   };
 
   // Открыл ссылку max.ru/<бот>?start=inv_… — MAX присылает bot_started с этим payload
@@ -436,9 +527,8 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
       if (a.type === 'image') urls.push(a.payload.url);
     }
     const text = ctx.message?.body?.text ?? '';
-    const session = activeSession(maxUserId);
 
-    if (!session) {
+    if (!activeSession(maxUserId)) {
       if (urls.length === 0) return next();
       if (!(await executorFor(deps, maxUserId))) return next(); // фото от жителя — общий ответ
       await ctx.reply(
@@ -449,30 +539,45 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
 
     if (text.startsWith('/')) return next(); // команды работают и в режиме фото
 
-    if (urls.length === 0) {
-      await ctx.reply(
-        `Сейчас жду фото результата по заявке №${session.number}. Пришлите фото или нажмите «Завершить заявку».`,
-        { attachments: [finishKeyboard(session.requestId)] },
-      );
-      return;
-    }
-
     const mid = ctx.message?.body?.mid;
-    if (!mid || !deps.photosDir) return next();
-    const result = await savePhotos(
-      deps,
-      deps.photosDir,
-      maxUserId,
-      mid,
-      urls.slice(0, MAX_PHOTOS_PER_MESSAGE),
-      session.requestId,
-    );
-    if (!result.keepSession) sessions.delete(maxUserId);
-    if (!result.text) return;
-    await ctx.reply(
-      result.text,
-      result.keepSession ? { attachments: [finishKeyboard(session.requestId)] } : undefined,
-    );
+    const send: Send = (t, extra) => ctx.reply(t, extra);
+
+    await oneByOne(maxUserId, async () => {
+      // Сессию берём заново: пока ждали очереди, заявку могли завершить
+      const session = activeSession(maxUserId);
+      if (!session) {
+        if (urls.length) await ctx.reply('Приём фото по этой заявке уже закрыт.');
+        return;
+      }
+
+      if (urls.length === 0) {
+        await showPrompt(
+          session,
+          `Жду фото результата по заявке №${session.number}. Пришлите фото или нажмите «Завершить заявку».`,
+          send,
+        );
+        return;
+      }
+
+      if (!mid || !deps.photosDir) return;
+      const result = await savePhotos(
+        deps,
+        deps.photosDir,
+        maxUserId,
+        mid,
+        urls.slice(0, MAX_PHOTOS_PER_MESSAGE),
+        session.requestId,
+      );
+
+      if (!result.keepSession) {
+        // Заявка закрыта или не ваша — режим фото выключаем и кнопки убираем
+        sessions.delete(maxUserId);
+        await retire(session.prompt);
+        if (result.text) await ctx.reply(result.text);
+        return;
+      }
+      if (result.text) await showPrompt(session, result.text, send);
+    });
   });
 
   // Кнопки: exe:start | complete («Выполнено») | finish («Завершить») | back («Назад») | decline
@@ -482,52 +587,65 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     const maxUserId = ctx.user?.user_id;
     const callbackId = ctx.callback?.callback_id;
     if (!action || !requestId || !maxUserId || !callbackId) return;
+    // Сообщение, под которым нажали кнопку: его заменит ответ, убирать его не нужно
+    const pressedMid = ctx.message?.body?.mid;
 
-    let outcome: Outcome;
-    let note: string | null = null;
+    await oneByOne(maxUserId, async () => {
+      let outcome: Outcome;
+      let note: string | null = null;
 
-    if (action === 'complete' && deps.photosDir) {
-      outcome = await enterPhotoMode(deps, requestId, maxUserId);
-      if (outcome.reply && outcome.number) {
-        const previous = activeSession(maxUserId);
-        if (previous && previous.requestId !== requestId) {
-          note = `Приём фото по заявке №${previous.number} закрыт — теперь фото пойдут к заявке №${outcome.number}.`;
+      if (action === 'complete' && deps.photosDir) {
+        outcome = await enterPhotoMode(deps, requestId, maxUserId);
+        if (outcome.reply && outcome.number) {
+          const previous = activeSession(maxUserId);
+          if (previous && previous.requestId !== requestId) {
+            note = `Приём фото по заявке №${previous.number} закрыт — теперь фото пойдут к заявке №${outcome.number}.`;
+          }
+          if (previous) await retire(previous.prompt, pressedMid);
+          // Наряд превращается в сообщение режима фото: при следующем ответе снимем с него
+          // кнопки, но само сообщение оставим — в нём адрес и время
+          sessions.set(maxUserId, {
+            requestId,
+            number: outcome.number,
+            until: Date.now() + PHOTO_SESSION_MS,
+            prompt: pressedMid
+              ? { mid: pressedMid, text: outcome.reply, removable: false }
+              : undefined,
+          });
         }
-        sessions.set(maxUserId, {
-          requestId,
-          number: outcome.number,
-          until: Date.now() + PHOTO_SESSION_MS,
-        });
+      } else if (action === 'back') {
+        const closed = closeSession(maxUserId, requestId);
+        await retire(closed?.prompt, pressedMid);
+        outcome = await backToOrder(deps, requestId, maxUserId);
+      } else {
+        // «Выполнено» без режима фото (PHOTOS_DIR не задан) — сразу завершить заявку
+        const key: ActionKey = action === 'complete' ? 'finish' : (action as ActionKey);
+        outcome = await applyAction(deps, key, requestId, maxUserId, callbackId);
+        if (outcome.reply && (key === 'finish' || key === 'decline')) {
+          const closed = closeSession(maxUserId, requestId);
+          await retire(closed?.prompt, pressedMid);
+        }
       }
-    } else if (action === 'back') {
-      closeSession(maxUserId, requestId);
-      outcome = await backToOrder(deps, requestId, maxUserId);
-    } else {
-      // «Выполнено» без режима фото (PHOTOS_DIR не задан) — сразу завершить заявку
-      const key: ActionKey = action === 'complete' ? 'finish' : (action as ActionKey);
-      outcome = await applyAction(deps, key, requestId, maxUserId, callbackId);
-      if (outcome.reply && (key === 'finish' || key === 'decline'))
-        closeSession(maxUserId, requestId);
-    }
 
-    if (outcome.silent) {
-      // Повтор: только снимаем «крутилку» с кнопки, сообщение и чат не трогаем
-      await ctx.answerOnCallback({}).catch(() => {});
-      return;
-    }
+      if (outcome.silent) {
+        // Повтор: только снимаем «крутилку» с кнопки, сообщение и чат не трогаем
+        await ctx.answerOnCallback({}).catch(() => {});
+        return;
+      }
 
-    if (outcome.reply) {
-      // Успех: сообщение с кнопкой заменяется новым состоянием
-      const attachments = outcome.keyboard ? [outcome.keyboard] : [];
-      await ctx
-        .answerOnCallback({ message: { text: outcome.reply, attachments } })
-        .catch(() => ctx.reply(outcome.reply ?? '', { attachments }));
-      if (note) await ctx.reply(note);
-    } else {
-      // Отказ (не ваша заявка, уже закрыта): сообщение не трогаем, объясняем отдельным
-      await ctx.answerOnCallback({}).catch(() => {});
-      await ctx.reply(outcome.popup);
-    }
+      if (outcome.reply) {
+        // Успех: сообщение с кнопкой заменяется новым состоянием
+        const attachments = outcome.keyboard ? [outcome.keyboard] : [];
+        await ctx
+          .answerOnCallback({ message: { text: outcome.reply, attachments } })
+          .catch(() => ctx.reply(outcome.reply ?? '', { attachments }));
+        if (note) await ctx.reply(note);
+      } else {
+        // Отказ (не ваша заявка, уже закрыта): сообщение не трогаем, объясняем отдельным
+        await ctx.answerOnCallback({}).catch(() => {});
+        await ctx.reply(outcome.popup);
+      }
+    });
   });
 }
 
