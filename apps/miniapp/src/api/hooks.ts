@@ -38,7 +38,7 @@ export const keys = {
 };
 
 export function useMe() {
-  return useQuery({ queryKey: keys.me, queryFn: () => api<Me>('/api/me') });
+  return useQuery({ queryKey: keys.me, queryFn: () => api<Me>('/api/me'), staleTime: 5 * 60_000 });
 }
 
 export function useHome(houseId: string | undefined) {
@@ -83,11 +83,11 @@ export function useMyRequests() {
   });
 }
 
-export function useRequest(id: string | undefined) {
+export function useRequest(id: string | undefined, enabled = true) {
   return useQuery({
     queryKey: keys.request(id ?? ''),
     queryFn: () => api<RequestDetail>(`/api/requests/${id}`),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && enabled,
     refetchInterval: 30_000,
   });
 }
@@ -107,7 +107,10 @@ export function useJoinRequest(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: JoinInput) => api<RequestDetail>(`/api/requests/${id}/join`, json(input)),
-    onSuccess: (r) => qc.setQueryData(keys.request(r.id), r),
+    onSuccess: (r) => {
+      qc.setQueryData(keys.request(r.id), r);
+      void qc.invalidateQueries({ queryKey: keys.requests });
+    },
   });
 }
 
@@ -153,6 +156,9 @@ export function useShiftDemoClock() {
       applyDemoOffset(state.offsetMs);
       void qc.invalidateQueries({ queryKey: keys.requests });
       void qc.invalidateQueries({ queryKey: ['request'] });
+      void qc.invalidateQueries({ queryKey: ['dispatcher'] });
+      void qc.invalidateQueries({ queryKey: ['home'] });
+      void qc.invalidateQueries({ queryKey: keys.myData });
     },
   });
 }

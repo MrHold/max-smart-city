@@ -5,12 +5,22 @@ import { isDemoMode } from '../../clock';
 import { DemoClockControl } from '../../clock/DemoClockControl';
 import { Button, ButtonLink, Card, ErrorView, Loading, PageHeader, Stat } from '../../ui';
 
+const roleLabel: Record<string, string> = {
+  resident: 'Житель',
+  dispatcher: 'Диспетчер',
+  executor: 'Исполнитель',
+  none: 'нет',
+};
+
 export function Profile() {
   const me = useMe();
   const become = useBecomeDispatcher();
   const navigate = useNavigate();
   if (me.isPending) return <Loading />;
-  if (me.isError) return <ErrorView message={me.error.message} onRetry={() => void me.refetch()} />;
+  if (me.isError)
+    return (
+      <ErrorView error={me.error} message={me.error.message} onRetry={() => void me.refetch()} />
+    );
   return (
     <main className="page">
       <PageHeader title="Профиль" subtitle="Вход по аккаунту MAX, без регистрации" />
@@ -29,7 +39,7 @@ export function Profile() {
         </ButtonLink>
       </Card>
       <div className="stats">
-        <Stat small value={me.data.role ?? 'нет'} label="роль" />
+        <Stat small value={roleLabel[me.data.role ?? 'none']} label="роль" />
         <Stat
           small
           value={`${getPlatform()}${isMockBridge() ? ' (mock)' : ''}`}
@@ -73,9 +83,11 @@ export function Profile() {
           Мои данные
         </ButtonLink>
       </Card>
-      <Card>
-        <DemoClockControl />
-      </Card>
+      {isDemoMode && (
+        <Card>
+          <DemoClockControl />
+        </Card>
+      )}
       <div className="hint">
         Согласие на обработку данных дано в боте при первом входе. Персональные данные соседям не
         показываются.

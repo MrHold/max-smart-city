@@ -34,6 +34,15 @@ export interface WebApp {
   /** Только https и только по клику пользователя; в веб-версии MAX не работает. */
   downloadFile?: (url: string, fileName: string) => Promise<unknown>;
   openLink?: (url: string) => void;
+  enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
+  BackButton?: {
+    show: () => void;
+    hide: () => void;
+    isVisible?: boolean;
+    onClick: (cb: () => void) => void;
+    offClick?: (cb: () => void) => void;
+  };
 }
 
 declare global {

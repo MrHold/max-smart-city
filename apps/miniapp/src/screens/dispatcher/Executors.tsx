@@ -7,7 +7,8 @@ export function Executors({ houseId }: { houseId: string | undefined }) {
   const cats = useCategories(houseId);
 
   if (q.isPending) return <Loading />;
-  if (q.isError) return <ErrorView message={q.error.message} onRetry={() => void q.refetch()} />;
+  if (q.isError)
+    return <ErrorView error={q.error} message={q.error.message} onRetry={() => void q.refetch()} />;
   if (q.data.length === 0)
     return <Empty title="Исполнителей пока нет" text="Они добавляются в данных организации" />;
 

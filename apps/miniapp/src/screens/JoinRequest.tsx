@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useJoinRequest, useMe, useRequest } from '../api/hooks';
 import type { MeasurementPlace } from '../api/types';
-import { fmtDateTime, plural } from '../lib/format';
+import { useBackButton } from '../bridge/back';
+import { fmtDateTime, parseTemp, plural } from '../lib/format';
 import { Button, Card, ErrorView, Field, Loading, PageHeader, Tile } from '../ui';
 import { IconUsers } from '../ui/icons';
 
@@ -10,16 +11,28 @@ export function JoinRequest() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const me = useMe();
-  const q = useRequest(id);
+  const hasHouse = Boolean(me.data?.house);
+  const q = useRequest(id, hasHouse);
   const join = useJoinRequest(id);
+  useBackButton(() => navigate('/', { replace: true }));
   const [apartment, setApartment] = useState('');
   const [temp, setTemp] = useState('');
   const [place, setPlace] = useState<MeasurementPlace>('room');
   const [error, setError] = useState<string | null>(null);
 
-  if (q.isPending || me.isPending) return <Loading />;
-  if (q.isError) return <ErrorView message={q.error.message} onRetry={() => void q.refetch()} />;
+  if (me.isPending) return <Loading />;
+  if (me.isError)
+    return (
+      <ErrorView error={me.error} message={me.error.message} onRetry={() => void me.refetch()} />
+    );
+  // Сосед без дома сначала привязывает его и возвращается сюда
+  if (!hasHouse) return <Navigate to="/bind" replace state={{ next: `/join/${id}` }} />;
+  if (q.isPending) return <Loading />;
+  if (q.isError)
+    return <ErrorView error={q.error} message={q.error.message} onRetry={() => void q.refetch()} />;
   const r = q.data;
+  // Автору и уже присоединившемуся здесь делать нечего — им нужна карточка
+  if (r.isAuthor || !r.canJoin) return <Navigate to={`/requests/${id}`} replace />;
   const label = apartment || me.data?.apartmentLabel || '';
   const needsTemp = r.kind === 'utility_quality';
 
@@ -28,8 +41,9 @@ export function JoinRequest() {
     if (apartment && (!/^\d{1,4}$/.test(apartment) || Number(apartment) < 1)) {
       return setError('Номер квартиры — от 1 до 9999');
     }
-    if (needsTemp && temp !== '' && Number.isNaN(Number(temp)))
-      return setError('Температура — число');
+    const t = parseTemp(temp);
+    if (needsTemp && temp !== '' && (t === null || t < -30 || t > 45))
+      return setError('Температура — число от −30 до +45');
     try {
       await join.mutateAsync({
         apartmentLabel: label.startsWith('кв') ? label : `кв. ${label}`,
@@ -37,7 +51,7 @@ export function JoinRequest() {
           needsTemp && temp !== ''
             ? [
                 {
-                  value: Number(temp),
+                  value: t as number,
                   unit: 'celsius',
                   measuredAt: new Date().toISOString(),
                   place,

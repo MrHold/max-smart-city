@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useBindHouse, useHouseSearch } from '../../api/hooks';
 import type { HouseSearchItem } from '../../api/types';
 import { Button, Card, Field, PageHeader, ProvenanceChip } from '../../ui';
@@ -7,6 +7,7 @@ import { IconSearch } from '../../ui/icons';
 
 export function BindHouse() {
   const navigate = useNavigate();
+  const next = (useLocation().state as { next?: string } | null)?.next;
   const [q, setQ] = useState('');
   const [house, setHouse] = useState<HouseSearchItem | null>(null);
   const [apartment, setApartment] = useState('');
@@ -21,7 +22,7 @@ export function BindHouse() {
     }
     try {
       await bind.mutateAsync({ houseId: house.id, apartmentLabel: `кв. ${apartment}` });
-      navigate('/', { replace: true });
+      navigate(next ?? '/', { replace: true });
     } catch (e) {
       setError((e as Error).message);
     }

@@ -2,6 +2,7 @@ import type { DeleteMeResult } from '@msc/domain';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDeleteMe, useMyData } from '../../api/hooks';
+import { useBackButton } from '../../bridge/back';
 import { fmtDate } from '../../lib/format';
 import { Button, Card, ErrorView, Loading, PageHeader } from '../../ui';
 
@@ -45,13 +46,16 @@ function Row({ label, value }: { label: string; value: number }) {
 }
 
 export function MyData() {
+  const navigate = useNavigate();
+  useBackButton(() => navigate('/profile'));
   const q = useMyData();
   const del = useDeleteMe();
   const [confirming, setConfirming] = useState(false);
 
   if (del.isSuccess) return <Done result={del.data} />;
   if (q.isPending) return <Loading />;
-  if (q.isError) return <ErrorView message={q.error.message} onRetry={() => void q.refetch()} />;
+  if (q.isError)
+    return <ErrorView error={q.error} message={q.error.message} onRetry={() => void q.refetch()} />;
   const d = q.data;
 
   return (
