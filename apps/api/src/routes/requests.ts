@@ -266,7 +266,11 @@ async function buildDetail(
     endedAt: row.endedAt?.toISOString() ?? null,
     plannedNotice: row.plannedNotice,
     measurements,
-    photos: photoRows.map((p) => ({ key: p.storageKey, url: `/api/photos/${p.storageKey}` })),
+    photos: photoRows.map((p) => ({
+      key: p.storageKey,
+      url: `/api/photos/${p.storageKey}`,
+      stage: p.stage === 'after' ? ('after' as const) : ('before' as const),
+    })),
     events: eventRows.map((e) => ({
       type: e.type,
       label:

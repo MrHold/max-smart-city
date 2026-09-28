@@ -26,7 +26,9 @@ import {
   Stat,
   Timeline,
 } from '../../ui';
-import { IconCamera, IconClock, IconCopy, IconShare, IconUsers } from '../../ui/icons';
+import { IconClock, IconCopy, IconShare, IconUsers } from '../../ui/icons';
+
+type Photo = RequestDetail['photos'][number];
 
 /** Просрочка выполненной заявки известна только серверу (он смотрит на endedAt) —
  * локальный отсчёт от dueAt ведём лишь пока работа не сделана. */
@@ -59,6 +61,43 @@ function Deadline({ r }: { r: RequestDetail }) {
         ? `Срок вышел ${fmtDuration(left)} назад`
         : `Срок — до ${fmtDate(r.dueAt)}, осталось ${fmtDuration(left)}`}
     </span>
+  );
+}
+
+/**
+ * Лента миниатюр. По нажатию фото открывается на весь экран, повторное нажатие закрывает:
+ * на миниатюре 72 px не разглядеть, что именно сделано.
+ */
+function PhotoStrip({ photos }: { photos: Photo[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const withUrl = photos.filter((p) => p.url);
+  if (withUrl.length === 0) return null;
+  return (
+    <>
+      <div className="photos">
+        {withUrl.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            className="thumb thumb--button"
+            onClick={() => setOpen(p.url)}
+            aria-label="Открыть фото"
+          >
+            <img src={p.url} alt="" loading="lazy" />
+          </button>
+        ))}
+      </div>
+      {open && (
+        <button
+          type="button"
+          className="lightbox"
+          onClick={() => setOpen(null)}
+          aria-label="Закрыть фото"
+        >
+          <img src={open} alt="" />
+        </button>
+      )}
+    </>
   );
 }
 
@@ -199,6 +238,9 @@ export function RequestCard() {
   const overdue = isOverdueNow(r, demoClock.now()) && !closed && r.status !== 'done';
   const total = r.joinersCount + 1;
   const reason = r.status === 'rejected' ? rejectionReason(r.events) : null;
+  // Фото без stage (старые ответы, мок) считаем фото жителя
+  const residentPhotos = r.photos.filter((p) => p.stage !== 'after');
+  const resultPhotos = r.photos.filter((p) => p.stage === 'after');
 
   return (
     <main className="page">
@@ -266,6 +308,18 @@ export function RequestCard() {
         </Card>
       )}
 
+      {/* Фото исполнителя — перед подтверждением: житель сначала видит работу, потом решает */}
+      {resultPhotos.length > 0 && (
+        <Card className="card__section">
+          <div className="eyebrow">Результат работы</div>
+          <PhotoStrip photos={resultPhotos} />
+          <div className="hint">
+            {resultPhotos.length} {plural(resultPhotos.length, 'фото', 'фото', 'фото')} от
+            исполнителя. Нажмите, чтобы открыть крупно.
+          </div>
+        </Card>
+      )}
+
       {r.status === 'done' && r.isAuthor && (
         <Card className="card__section card--accent">
           <div className="eyebrow eyebrow--accent">Проверьте результат</div>
@@ -295,23 +349,19 @@ export function RequestCard() {
         </Card>
       )}
 
-      <Card>
-        <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
-          <div className="thumb">
-            {r.photos[0]?.url ? <img src={r.photos[0].url} alt="" /> : <IconCamera size={26} />}
+      <Card className="card__section">
+        <div className="stack" style={{ fontSize: 14 }}>
+          <div>
+            <span className="muted">Где:</span> {r.locationText}
           </div>
-          <div className="stack" style={{ fontSize: 14 }}>
+          {r.measurements[0] && (
             <div>
-              <span className="muted">Где:</span> {r.locationText}
+              <span className="muted">Замер:</span> {r.measurements[0].value} °C
             </div>
-            {r.measurements[0] && (
-              <div>
-                <span className="muted">Замер:</span> {r.measurements[0].value} °C
-              </div>
-            )}
-            {r.description && <div>{r.description}</div>}
-          </div>
+          )}
+          {r.description && <div>{r.description}</div>}
         </div>
+        <PhotoStrip photos={residentPhotos} />
       </Card>
 
       {r.isAuthor && (r.claim.available || r.gji.available || r.gji.afterAt) && (

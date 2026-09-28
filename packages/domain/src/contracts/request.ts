@@ -95,7 +95,11 @@ export const RequestDetailSchema = RequestSummarySchema.extend({
   endedAt: IsoDateTime.nullable(),
   plannedNotice: z.boolean().nullable(),
   measurements: z.array(MeasurementSchema),
-  photos: z.array(z.object({ key: z.string(), url: z.string() })),
+  // stage: before — фото жителя при подаче, after — результат от исполнителя.
+  // Необязательное: мок и старые ответы без stage считаем фото жителя.
+  photos: z.array(
+    z.object({ key: z.string(), url: z.string(), stage: z.enum(['before', 'after']).optional() }),
+  ),
   events: z.array(RequestEventSchema),
   joiners: z.array(JoinerPublicSchema),
   liability: LiabilitySchema.nullable(),
