@@ -10,7 +10,8 @@ export function Requests() {
   const [tab, setTab] = useState<'active' | 'closed'>('active');
 
   if (q.isPending) return <Loading />;
-  if (q.isError) return <ErrorView message={q.error.message} onRetry={() => void q.refetch()} />;
+  if (q.isError)
+    return <ErrorView error={q.error} message={q.error.message} onRetry={() => void q.refetch()} />;
 
   const active = q.data.filter((r) => !closedStatuses.includes(r.status));
   const closed = q.data.filter((r) => closedStatuses.includes(r.status));

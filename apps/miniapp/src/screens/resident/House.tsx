@@ -1,13 +1,25 @@
+import { Navigate } from 'react-router-dom';
 import { useHome, useMe } from '../../api/hooks';
 import { Card, ErrorView, Loading, PageHeader, ProvenanceChip } from '../../ui';
 
 export function House() {
   const me = useMe();
   const home = useHome(me.data?.house?.id);
-  if (me.isPending || home.isPending) return <Loading />;
-  if (me.isError) return <ErrorView message={me.error.message} onRetry={() => void me.refetch()} />;
+  if (me.isPending) return <Loading />;
+  if (me.isError)
+    return (
+      <ErrorView error={me.error} message={me.error.message} onRetry={() => void me.refetch()} />
+    );
+  if (!me.data.house) return <Navigate to="/bind" replace />;
+  if (home.isPending) return <Loading />;
   if (home.isError)
-    return <ErrorView message={home.error.message} onRetry={() => void home.refetch()} />;
+    return (
+      <ErrorView
+        error={home.error}
+        message={home.error.message}
+        onRetry={() => void home.refetch()}
+      />
+    );
   const h = home.data;
   return (
     <main className="page">
@@ -21,8 +33,8 @@ export function House() {
           <ProvenanceChip value={h.house.dataKind} />
         </div>
         <div className="muted">
-          Характеристики, тарифы и капремонт — Should Have. Официальный источник для них — ГИС ЖКХ и
-          Госуслуги.Дом, мы их не дублируем.
+          Характеристики, тарифы и капремонт появятся позже. Официальный источник для них — ГИС ЖКХ
+          и Госуслуги.Дом, мы их не дублируем.
         </div>
       </Card>
       {h.org?.address && (

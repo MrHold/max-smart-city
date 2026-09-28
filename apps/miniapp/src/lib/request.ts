@@ -40,8 +40,8 @@ const rank: Record<RequestStatus, number> = {
   rejected: 1,
   assigned: 2,
   in_progress: 2,
+  reopened: 2,
   done: 3,
-  reopened: 3,
   confirmed: 4,
 };
 
@@ -58,12 +58,22 @@ export function buildTimeline(status: RequestStatus, events: RequestEvent[]): Ti
   const current = rank[status];
   return order.map((o, i) => {
     const types = eventTypes[o.status] ?? [o.status];
-    const ev = events.find((e) => types.includes(e.type));
+    // Последнее событие типа: после возврата в работу шаг проходят повторно
+    const ev = [...events].reverse().find((e) => types.includes(e.type));
     const state: TimelineStep['state'] = i < current ? 'done' : i === current ? 'current' : 'todo';
-    return {
-      label: state === 'todo' ? o.todo : o.label,
-      state,
-      ...(ev ? { at: fmtDateTime(ev.at) } : {}),
-    };
+    const label =
+      status === 'reopened' && state === 'current'
+        ? 'Возвращена в работу — ждём исполнителя'
+        : state === 'todo'
+          ? o.todo
+          : o.label;
+    return { label, state, ...(ev ? { at: fmtDateTime(ev.at) } : {}) };
   });
+}
+
+/** Причина отказа диспетчера — из события; таймлайн для отклонённой заявки не нужен. */
+export function rejectionReason(events: RequestEvent[]): string | null {
+  const ev = [...events].reverse().find((e) => e.type === 'rejected');
+  if (!ev) return null;
+  return ev.label.replace(/^Отклонена:?\s*/i, '') || null;
 }

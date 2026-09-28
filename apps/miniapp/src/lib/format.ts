@@ -15,7 +15,10 @@ export function fmtDuration(ms: number): string {
   const abs = Math.abs(ms);
   const h = Math.floor(abs / 3_600_000);
   const m = Math.floor((abs % 3_600_000) / 60_000);
-  if (h >= 48) return `${Math.floor(h / 24)} д`;
+  if (h >= 48) {
+    const d = Math.floor(h / 24);
+    return `${d} ${plural(d, 'день', 'дня', 'дней')}`;
+  }
   if (h > 0) return m ? `${h} ч ${m} мин` : `${h} ч`;
   return `${m} мин`;
 }
@@ -26,6 +29,12 @@ export function plural(n: number, one: string, few: string, many: string): strin
   if (m10 === 1 && m100 !== 11) return one;
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
   return many;
+}
+
+/** Температура из поля ввода: на русской клавиатуре десятичный разделитель — запятая. */
+export function parseTemp(s: string): number | null {
+  const t = Number(s.trim().replace(',', '.'));
+  return s.trim() === '' || Number.isNaN(t) ? null : t;
 }
 
 export function toLocalInputValue(d: Date): string {

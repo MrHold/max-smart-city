@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useCategories, useCreateRequest, useMe, useUploadPhoto } from '../../api/hooks';
 import type { Category, LocationScope, MeasurementPlace, NewRequestInput } from '../../api/types';
-import { toLocalInputValue } from '../../lib/format';
+import { ensureWebApp } from '../../bridge';
+import { useBackButton } from '../../bridge/back';
+import { demoClock } from '../../clock';
+import { parseTemp, toLocalInputValue } from '../../lib/format';
 import { Button, Card, cx, ErrorView, Field, Loading, StepProgress, Tile } from '../../ui';
 import {
   IconArrowLeft,
@@ -71,7 +74,7 @@ export function NewRequest() {
   const [floor, setFloor] = useState('');
   const [note, setNote] = useState('');
   const [startedAt, setStartedAt] = useState(() =>
-    toLocalInputValue(new Date(Date.now() - 3_600_000)),
+    toLocalInputValue(new Date(demoClock.now().getTime() - 3_600_000)),
   );
   const [temp, setTemp] = useState('');
   const [place, setPlace] = useState<MeasurementPlace>('room');
@@ -79,6 +82,21 @@ export function NewRequest() {
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<Array<{ key: string; preview: string }>>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const goBack = () => {
+    setError(null);
+    if (step > 1) setStep(step - 1);
+    else navigate('/', { replace: true });
+  };
+  useBackButton(goBack);
+
+  // Со второго шага в форме уже есть введённое: пусть MAX переспросит перед закрытием
+  useEffect(() => {
+    const wa = ensureWebApp();
+    if (step >= 2) wa.enableClosingConfirmation?.();
+    else wa.disableClosingConfirmation?.();
+    return () => wa.disableClosingConfirmation?.();
+  }, [step]);
 
   const groups = useMemo(() => {
     const g = new Map<keyof typeof groupTitle, Category[]>();
@@ -91,19 +109,33 @@ export function NewRequest() {
   }, [cats.data]);
 
   if (me.isPending || cats.isPending) return <Loading />;
-  if (me.isError) return <ErrorView message={me.error.message} onRetry={() => void me.refetch()} />;
+  if (me.isError)
+    return (
+      <ErrorView error={me.error} message={me.error.message} onRetry={() => void me.refetch()} />
+    );
   if (!me.data.house) return <Navigate to="/bind" replace />;
   if (cats.isError)
-    return <ErrorView message={cats.error.message} onRetry={() => void cats.refetch()} />;
+    return (
+      <ErrorView
+        error={cats.error}
+        message={cats.error.message}
+        onRetry={() => void cats.refetch()}
+      />
+    );
 
   const isQuality = category?.kind === 'utility_quality';
   const isInterruption = category?.kind === 'utility_interruption';
   const needsTemp = isQuality || (isInterruption && category?.service === 'heating');
 
+  const tempValue = parseTemp(temp);
   const validateStep2 = (): string | null => {
     if ((scope === 'entrance' || scope === 'floor') && !entrance) return 'Укажите номер подъезда';
     if (scope === 'floor' && !floor) return 'Укажите этаж';
-    if (needsTemp && (temp === '' || Number.isNaN(Number(temp)))) return 'Нужен замер температуры';
+    if (new Date(startedAt).getTime() > demoClock.now().getTime())
+      return 'Начало не может быть в будущем';
+    if (needsTemp && tempValue === null) return 'Нужен замер температуры';
+    if (needsTemp && tempValue !== null && (tempValue < -30 || tempValue > 45))
+      return 'Температура от −30 до +45 °C';
     if (isInterruption && planned === null) return 'Ответьте, было ли объявление об отключении';
     return null;
   };
@@ -132,9 +164,10 @@ export function NewRequest() {
       },
       description,
       startedAt: new Date(startedAt).toISOString(),
-      measurements: needsTemp
-        ? [{ value: Number(temp), unit: 'celsius', measuredAt: new Date().toISOString(), place }]
-        : [],
+      measurements:
+        needsTemp && tempValue !== null
+          ? [{ value: tempValue, unit: 'celsius', measuredAt: new Date().toISOString(), place }]
+          : [],
       plannedNotice: isInterruption ? planned : null,
       photoKeys: photos.map((p) => p.key),
     };
@@ -144,13 +177,6 @@ export function NewRequest() {
     } catch (e) {
       setError((e as Error).message);
     }
-  };
-
-  const goBack = () => {
-    setError(null);
-    if (step > 1) setStep(step - 1);
-    else if (window.history.length > 1) navigate(-1);
-    else navigate('/', { replace: true });
   };
 
   return (
@@ -225,7 +251,7 @@ export function NewRequest() {
                     className="input"
                     inputMode="numeric"
                     value={entrance}
-                    onChange={(e) => setEntrance(e.target.value)}
+                    onChange={(e) => setEntrance(e.target.value.replace(/\D/g, '').slice(0, 3))}
                   />
                 </Field>
                 {scope === 'floor' && (
@@ -235,7 +261,7 @@ export function NewRequest() {
                       className="input"
                       inputMode="numeric"
                       value={floor}
-                      onChange={(e) => setFloor(e.target.value)}
+                      onChange={(e) => setFloor(e.target.value.replace(/\D/g, '').slice(0, 3))}
                     />
                   </Field>
                 )}
@@ -260,6 +286,7 @@ export function NewRequest() {
               className="input"
               type="datetime-local"
               value={startedAt}
+              max={toLocalInputValue(demoClock.now())}
               onChange={(e) => setStartedAt(e.target.value)}
             />
           </Field>
@@ -326,7 +353,7 @@ export function NewRequest() {
             <div className="photos">
               {photos.map((p) => (
                 <div className="thumb" key={p.key}>
-                  <img src={p.preview} alt="" />
+                  <img src={p.preview} alt="Фото проблемы" />
                 </div>
               ))}
               {photos.length < 5 && (

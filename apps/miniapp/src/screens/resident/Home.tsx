@@ -45,7 +45,10 @@ export function Home() {
   const requests = useMyRequests();
 
   if (me.isPending) return <Loading />;
-  if (me.isError) return <ErrorView message={me.error.message} onRetry={() => void me.refetch()} />;
+  if (me.isError)
+    return (
+      <ErrorView error={me.error} message={me.error.message} onRetry={() => void me.refetch()} />
+    );
   if (!me.data.house) return <Navigate to="/bind" replace />;
 
   const active = (requests.data ?? []).filter((r) => !closedStatuses.includes(r.status));
@@ -76,7 +79,11 @@ export function Home() {
         {home.isPending ? (
           <Loading />
         ) : home.isError ? (
-          <ErrorView message={home.error.message} onRetry={() => void home.refetch()} />
+          <ErrorView
+            error={home.error}
+            message={home.error.message}
+            onRetry={() => void home.refetch()}
+          />
         ) : (
           <Card pad={false} className="list">
             {home.data.contacts.map((c) => (

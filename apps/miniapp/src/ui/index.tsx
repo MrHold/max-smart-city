@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
+import { ApiError } from '../api/client';
 import type { Provenance } from '../api/types';
 import { IconCheck, IconPhone } from './icons';
 
@@ -303,14 +304,26 @@ export function Loading({ text }: { text?: string }) {
   );
 }
 
-export function ErrorView({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorView({
+  message,
+  onRetry,
+  error,
+}: {
+  message: string;
+  onRetry?: () => void;
+  error?: unknown;
+}) {
+  // Протухшая initData не лечится повтором: MAX выдаст новую только при повторном открытии
+  const expired = error instanceof ApiError && error.status === 401;
   return (
     <div className="center" role="alert">
       <div className="h2" style={{ color: 'var(--ink)' }}>
-        Не получилось загрузить
+        {expired ? 'Откройте приложение заново' : 'Не получилось загрузить'}
       </div>
-      <div className="muted">{message}</div>
-      {onRetry && (
+      <div className="muted">
+        {expired ? 'Сессия MAX истекла. Закройте мини-приложение и откройте его снова.' : message}
+      </div>
+      {onRetry && !expired && (
         <Button variant="secondary" onClick={onRetry}>
           Повторить
         </Button>

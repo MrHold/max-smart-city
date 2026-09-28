@@ -1,13 +1,21 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useConfirmRequest, useOpenDocument, useRequest } from '../../api/hooks';
 import type { Liability, RequestDetail } from '../../api/types';
 import { ensureWebApp } from '../../bridge';
+import { useBackButton } from '../../bridge/back';
 import { demoClock, useDemoOffset } from '../../clock';
 import { fmtDate, fmtDateTime, fmtDuration, initials, plural } from '../../lib/format';
-import { buildTimeline, closedStatuses, statusLabel, statusTone } from '../../lib/request';
+import {
+  buildTimeline,
+  closedStatuses,
+  rejectionReason,
+  statusLabel,
+  statusTone,
+} from '../../lib/request';
 import {
   Button,
+  ButtonLink,
   Card,
   Chip,
   ErrorView,
@@ -20,14 +28,29 @@ import {
 } from '../../ui';
 import { IconCamera, IconClock, IconCopy, IconShare, IconUsers } from '../../ui/icons';
 
+/** Просрочка выполненной заявки известна только серверу (он смотрит на endedAt) —
+ * локальный отсчёт от dueAt ведём лишь пока работа не сделана. */
+export const isOverdueNow = (r: RequestDetail, now: Date): boolean =>
+  r.status === 'done' || closedStatuses.includes(r.status)
+    ? r.overdue
+    : r.overdue || new Date(r.dueAt).getTime() < now.getTime();
+
 function Deadline({ r }: { r: RequestDetail }) {
   useDemoOffset();
   const left = new Date(r.dueAt).getTime() - demoClock.now().getTime();
-  const overdue = r.overdue || left < 0;
+  const overdue = isOverdueNow(r, demoClock.now());
   if (closedStatuses.includes(r.status)) {
     return overdue ? (
       <span className="status-line status-line--muted">закрыта с просрочкой</span>
     ) : null;
+  }
+  if (r.status === 'done') {
+    return (
+      <span className="status-line status-line--muted">
+        {r.endedAt ? `выполнена ${fmtDateTime(r.endedAt)}` : 'выполнена'}
+        {overdue && ', с просрочкой'}
+      </span>
+    );
   }
   return (
     <span className={`status-line ${overdue ? 'status-line--danger' : 'status-line--muted'}`}>
@@ -42,23 +65,25 @@ function Deadline({ r }: { r: RequestDetail }) {
 function ShareBlock({ r }: { r: RequestDetail }) {
   const [copied, setCopied] = useState(false);
   const total = r.joinersCount + 1;
-  const share = async () => {
-    const wa = ensureWebApp();
-    const text = `${r.title} — ${r.locationText}. Если у вас так же, присоединяйтесь: ${r.shareUrl}`;
-    if (wa.shareMaxContent) {
-      try {
-        await wa.shareMaxContent({ text });
-        return;
-      } catch {}
-    }
-    window.open(`https://max.ru/:share?text=${encodeURIComponent(text)}`, '_blank');
-  };
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(r.shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {}
+  };
+  const share = async () => {
+    const wa = ensureWebApp();
+    // Соседям — суть и подъезд, но не квартира автора
+    const where = r.locationText.replace(/,?\s*кв\.\s*\S+/i, '');
+    const text = `${r.title} — ${where}. Если у вас так же, присоединяйтесь: ${r.shareUrl}`;
+    if (wa.shareMaxContent) {
+      try {
+        await wa.shareMaxContent({ text });
+        return;
+      } catch {}
+    }
+    await copy();
   };
   return (
     <Card className="card__section card--accent">
@@ -82,7 +107,7 @@ function ShareBlock({ r }: { r: RequestDetail }) {
           Поделиться в чат дома
         </Button>
         <Button variant="secondary" onClick={() => void copy()} aria-label="Скопировать ссылку">
-          {copied ? 'Есть' : <IconCopy size={18} />}
+          {copied ? 'Скопировано' : <IconCopy size={18} />}
         </Button>
       </div>
       <div className="hint">
@@ -159,13 +184,21 @@ function LiabilityBlock({ l, closed }: { l: Liability; closed: boolean }) {
 
 export function RequestCard() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const q = useRequest(id);
   const confirm = useConfirmRequest(id ?? '');
   const doc = useOpenDocument();
+  useDemoOffset();
+  useBackButton(() => navigate('/requests'));
 
   if (q.isPending) return <Loading />;
-  if (q.isError) return <ErrorView message={q.error.message} onRetry={() => void q.refetch()} />;
+  if (q.isError)
+    return <ErrorView error={q.error} message={q.error.message} onRetry={() => void q.refetch()} />;
   const r = q.data;
+  const closed = closedStatuses.includes(r.status);
+  const overdue = isOverdueNow(r, demoClock.now()) && !closed && r.status !== 'done';
+  const total = r.joinersCount + 1;
+  const reason = r.status === 'rejected' ? rejectionReason(r.events) : null;
 
   return (
     <main className="page">
@@ -175,15 +208,42 @@ export function RequestCard() {
         </div>
         <h1 className="h1">{r.title}</h1>
         <div className="row wrap">
-          <Chip tone={r.overdue ? 'danger' : statusTone[r.status]}>
-            {r.overdue ? 'Срок вышел' : statusLabel[r.status]}
+          <Chip tone={overdue ? 'danger' : statusTone[r.status]}>
+            {overdue ? 'Срок вышел' : statusLabel[r.status]}
           </Chip>
+          {r.kind !== 'emergency' && (
+            <Chip tone="accent">
+              <IconUsers size={14} /> {total} {plural(total, 'квартира', 'квартиры', 'квартир')}
+            </Chip>
+          )}
           <Deadline r={r} />
         </div>
       </div>
 
-      {r.liability && <LiabilityBlock l={r.liability} closed={closedStatuses.includes(r.status)} />}
-      {r.isAuthor && r.kind !== 'emergency' && <ShareBlock r={r} />}
+      {r.status === 'rejected' && (
+        <div className="banner banner--danger">
+          <div>
+            <strong>Управляющая организация отклонила заявку.</strong>
+            {reason ? ` Причина: ${reason}` : ''}
+          </div>
+        </div>
+      )}
+
+      {confirm.isSuccess && confirm.variables === true && r.status === 'confirmed' && (
+        <div className="banner banner--accent">
+          Спасибо, заявка закрыта.
+          {r.claim.available && ' Заявление на перерасчёт можно скачать ниже.'}
+        </div>
+      )}
+
+      {r.canJoin && !r.isAuthor && (
+        <ButtonLink to={`/join/${r.id}`} size="lg" stretched>
+          <IconUsers size={18} />У меня тоже
+        </ButtonLink>
+      )}
+
+      {r.liability && <LiabilityBlock l={r.liability} closed={closed} />}
+      {r.isAuthor && r.kind !== 'emergency' && !closed && <ShareBlock r={r} />}
 
       {r.executor && (
         <Card className="card__section card--accent">
@@ -228,10 +288,12 @@ export function RequestCard() {
         </Card>
       )}
 
-      <Card className="card__section">
-        <div className="eyebrow">Ход заявки</div>
-        <Timeline steps={buildTimeline(r.status, r.events)} />
-      </Card>
+      {r.status !== 'rejected' && (
+        <Card className="card__section">
+          <div className="eyebrow">Ход заявки</div>
+          <Timeline steps={buildTimeline(r.status, r.events)} />
+        </Card>
+      )}
 
       <Card>
         <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
