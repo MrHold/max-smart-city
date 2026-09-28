@@ -128,7 +128,7 @@ export function startOutbox(deps: {
                       'Открыть заявку',
                       botUsername,
                       botId,
-                      `r_${payload.requestId}`,
+                      `req_${payload.requestId}`,
                     )
                   : Keyboard.button.openApp('Мой дом', botUsername, botId),
               ],
