@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDemoClock, useShiftDemoClock } from '../api/hooks';
 import { Button } from '../ui';
 import { applyDemoOffset, isDemoMode, useDemoOffset } from './index';
@@ -12,15 +12,29 @@ export function DemoClockSync() {
   return null;
 }
 
-/** Плашка на всех экранах, пока время перемотано: чтобы сдвинутые сроки не приняли за настоящие. */
+/** Плашка на всех экранах: показывает сдвиг времени и по нажатию раскрывает управление,
+ * чтобы на защите не ходить в профиль после каждого шага. */
 export function DemoClockBadge() {
   const offset = useDemoOffset();
   const q = useDemoClock();
-  if (!isDemoMode || offset === 0) return null;
+  const [open, setOpen] = useState(false);
+  if (!isDemoMode) return null;
   return (
-    <div className="demo-badge" role="status">
-      Демо-время: {q.data?.label ?? ''}
-    </div>
+    <>
+      <button
+        type="button"
+        className="demo-badge"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {offset === 0 ? 'Демо-часы' : `Демо-время: ${q.data?.label ?? ''}`}
+      </button>
+      {open && (
+        <div className="demo-popover">
+          <DemoClockControl />
+        </div>
+      )}
+    </>
   );
 }
 
