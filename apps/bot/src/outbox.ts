@@ -41,6 +41,17 @@ const CATEGORY_TITLES: Record<string, string> = {
 const categoryTitle = (code: unknown): string | null =>
   typeof code === 'string' ? (CATEGORY_TITLES[code] ?? code) : null;
 
+/**
+ * Убирает user_id из текста ошибки перед записью в базу и лог.
+ * Библиотека может вставить адрес запроса (…?user_id=123) или сам номер в сообщение,
+ * а user_id в открытом виде мы не храним — в users он только зашифрован.
+ */
+export function maskUserId(text: string, userId: number | null): string {
+  let out = text.replace(/(user_?id["'=:\s]*)\d+/gi, '$1***');
+  if (userId !== null) out = out.split(String(userId)).join('***');
+  return out;
+}
+
 /** Текст уведомления по payload, который API кладёт в outbox. */
 export function notificationText(p: Payload): string {
   const no = p.number ? `№${p.number}` : '';
@@ -113,9 +124,11 @@ export function startOutbox(deps: {
       return;
     }
 
+    // Объявлен до try: в catch он нужен, чтобы вычистить номер из текста ошибки
+    let maxUserId: number | null = null;
     try {
       const payload = (row.payload ?? {}) as Payload;
-      const maxUserId = decryptUserId(row.userIdEnc, encKey);
+      maxUserId = decryptUserId(row.userIdEnc, encKey);
 
       // Наряду — кнопки исполнителя; остальным — открыть заявку в мини-приложении
       const keyboard =
@@ -144,7 +157,8 @@ export function startOutbox(deps: {
     } catch (err) {
       const attempts = row.attempts + 1;
       const delaySec = Math.min(30 * 2 ** (attempts - 1), 3600);
-      const message = err instanceof Error ? err.message : String(err);
+      const raw = err instanceof Error ? err.message : String(err);
+      const message = maskUserId(raw, maxUserId);
       console.error(`outbox #${row.id}: попытка ${attempts} не удалась — ${message}`);
       await db
         .update(outbox)
