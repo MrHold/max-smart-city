@@ -19,6 +19,7 @@ const memoryStorage: Storage = {
 // понедельник 10:30 по Казани
 const clock = { now: () => new Date('2026-11-09T07:30:00Z') };
 const data = regionsDataSource(await loadRegionsData());
+// Сборка без базы и без проверки входа: только открытые маршруты
 const app = buildApp({ data, storage: memoryStorage, clock });
 
 beforeAll(() => app.ready());
@@ -64,41 +65,33 @@ describe('api', () => {
     }
   });
 
-  it('фото загружается и отдаётся обратно', async () => {
+  // S15: без проверки входа маршрут загрузки не создаётся вовсе.
+  // Загрузка с входом проверяется в routes/photos.test.ts.
+  it('без входа маршрута загрузки фото нет', async () => {
     const boundary = 'x-boundary';
-    const png = Buffer.from('89504e470d0a1a0a', 'hex');
     const body = Buffer.concat([
       Buffer.from(
         `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`,
       ),
-      png,
+      Buffer.from('89504e470d0a1a0a', 'hex'),
       Buffer.from(`\r\n--${boundary}--\r\n`),
     ]);
-    const up = await app.inject({
-      method: 'POST',
-      url: '/api/photos',
-      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
-      payload: body,
-    });
-    expect(up.statusCode).toBe(200);
-    const { key, url } = up.json() as { key: string; url: string };
-    expect(url).toBe(`/api/photos/${key}`);
-
-    const down = await app.inject({ url });
-    expect(down.statusCode).toBe(200);
-    expect(down.headers['content-type']).toContain('image/png');
-    expect(down.rawPayload.equals(png)).toBe(true);
-  });
-
-  it('не картинка — 400', async () => {
-    const boundary = 'x-boundary';
-    const body = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.txt"\r\nContent-Type: text/plain\r\n\r\nhi\r\n--${boundary}--\r\n`;
     const res = await app.inject({
       method: 'POST',
       url: '/api/photos',
       headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
       payload: body,
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('скачивание фото по ключу открыто и без входа', async () => {
+    // Кладём файл прямо в хранилище — загрузка в этой сборке недоступна
+    const png = Buffer.from('89504e470d0a1a0a', 'hex');
+    const { key } = await memoryStorage.put(png, 'image/png');
+    const res = await app.inject({ url: `/api/photos/${key}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('image/png');
+    expect(res.rawPayload.equals(png)).toBe(true);
   });
 });

@@ -61,6 +61,11 @@ export function buildApp(opts: AppOptions) {
         }
       : false,
     bodyLimit: 1024 * 1024,
+    // Перед API стоит ровно один прокси — Caddy, наружу порт API не открыт.
+    // Доверяем одному шагу X-Forwarded-For: req.ip становится адресом жителя,
+    // а не адресом контейнера Caddy. hop 0 — тот, кто подключился к нам напрямую
+    // (Caddy); всему, что дальше по цепочке, не верим — это клиент мог дописать сам.
+    trustProxy: (_address: string, hop: number) => hop === 0,
   });
 
   app.register(cors, {
@@ -75,6 +80,11 @@ export function buildApp(opts: AppOptions) {
   // роутером могут сидеть несколько жителей.
   app.register(rateLimit, {
     global: true,
+    // preHandler, а не onRequest по умолчанию: проверка входа (authenticate) висит
+    // на preHandler маршрутов, и лимит встаёт после неё — req.auth уже заполнен.
+    // На onRequest ключом всегда оказывался req.ip, то есть адрес Caddy, и все
+    // жители делили одну квоту на всех.
+    hook: 'preHandler',
     max: Number(process.env.RATE_LIMIT_MAX ?? 120),
     timeWindow: '1 minute',
     keyGenerator: (req) => req.auth?.userId ?? req.ip,
@@ -102,7 +112,8 @@ export function buildApp(opts: AppOptions) {
     reply.status(404).send({ error: { code: 'not_found', message: 'Нет такого адреса' } }),
   );
 
-  app.get('/api/health', async () => ({
+  // Health дёргают мониторинг и проверки после деплоя — лимит на него не вешаем
+  app.get('/api/health', { config: { rateLimit: false } }, async () => ({
     ok: true,
     now: (opts.clock ?? systemClock).now().toISOString(),
   }));
