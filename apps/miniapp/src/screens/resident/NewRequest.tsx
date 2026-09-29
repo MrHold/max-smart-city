@@ -1,3 +1,4 @@
+import { allowedScopes } from '@msc/domain';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useCategories, useCreateRequest, useMe, useUploadPhoto } from '../../api/hooks';
@@ -124,6 +125,10 @@ export function NewRequest() {
       />
     );
 
+  // Уборка двора не бывает «в квартире», а вода — «во дворе»: показываем только подходящие места
+  const scopeOptions = category
+    ? scopes.filter((s) => allowedScopes(category).includes(s.value))
+    : scopes;
   const isQuality = category?.kind === 'utility_quality';
   const isInterruption = category?.kind === 'utility_interruption';
   const needsTemp = isQuality || (isInterruption && category?.service === 'heating');
@@ -237,7 +242,11 @@ export function NewRequest() {
                       key={c.code}
                       on={category?.code === c.code}
                       icon={<Icon size={26} />}
-                      onClick={() => setCategory(c)}
+                      onClick={() => {
+                        setCategory(c);
+                        const allowed = allowedScopes(c);
+                        setScope((s) => (allowed.includes(s) ? s : (allowed[0] ?? 'apartment')));
+                      }}
                     >
                       {c.title}
                     </Tile>
@@ -253,13 +262,22 @@ export function NewRequest() {
         <>
           <div className="stack-8">
             <div className="eyebrow">Где</div>
-            <div className="tiles tiles--2">
-              {scopes.map((s) => (
-                <Tile key={s.value} short on={scope === s.value} onClick={() => setScope(s.value)}>
-                  {s.label}
-                </Tile>
-              ))}
-            </div>
+            {scopeOptions.length > 1 ? (
+              <div className="tiles tiles--2">
+                {scopeOptions.map((s) => (
+                  <Tile
+                    key={s.value}
+                    short
+                    on={scope === s.value}
+                    onClick={() => setScope(s.value)}
+                  >
+                    {s.label}
+                  </Tile>
+                ))}
+              </div>
+            ) : (
+              <div>{scopeOptions[0]?.label}</div>
+            )}
             {scope !== 'yard' && scope !== 'apartment' && (
               <div className="row">
                 <Field label="Подъезд" htmlFor="entrance">

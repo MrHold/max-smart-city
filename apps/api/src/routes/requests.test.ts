@@ -221,6 +221,33 @@ suite('заявки', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('не принимает место, где проблемы этой категории не бывает', async () => {
+    const yardInFlat = await call(
+      'POST',
+      '/api/requests',
+      AUTHOR,
+      newRequest({ category: 'yard_cleaning', measurements: [], location: { scope: 'apartment' } }),
+    );
+    expect(yardInFlat.statusCode).toBe(400);
+    expect(yardInFlat.json().error.message).toContain('Уборка');
+
+    const heatingInYard = await call(
+      'POST',
+      '/api/requests',
+      AUTHOR,
+      newRequest({ location: { scope: 'yard' } }),
+    );
+    expect(heatingInYard.statusCode).toBe(400);
+
+    const yardInYard = await call(
+      'POST',
+      '/api/requests',
+      AUTHOR,
+      newRequest({ category: 'yard_cleaning', measurements: [], location: { scope: 'yard' } }),
+    );
+    expect(yardInYard.statusCode, yardInYard.body).toBe(200);
+  });
+
   it('не принимает перерыв отопления без замера', async () => {
     const res = await call('POST', '/api/requests', AUTHOR, {
       ...newRequest({ category: 'heating_off', measurements: [] }),
