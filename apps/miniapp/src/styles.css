@@ -936,3 +936,15 @@ html.demo .page {
   object-fit: contain;
   border-radius: var(--r-tile);
 }
+
+/* Трубка на компьютере — <button> вместо ссылки: убрать браузерные рамку и отступы.
+   :where не добавляет специфичности, поэтому обводка call--outline сохраняется. */
+:where(button.call) {
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+:where(button.call.call--outline) {
+  border: 1px solid currentColor;
+}

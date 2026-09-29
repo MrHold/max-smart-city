@@ -22,6 +22,7 @@ import {
   formatRub,
   Loading,
   Money,
+  PhoneAction,
   ProvenanceChip,
   Stat,
   Timeline,
@@ -297,11 +298,7 @@ export function RequestCard() {
               {r.executor.slot && <div className="muted num">Придёт {r.executor.slot}</div>}
             </div>
           </div>
-          {r.executor.phone && (
-            <a className="btn btn--primary" href={`tel:${r.executor.phone.replace(/[^\d+]/g, '')}`}>
-              Позвонить
-            </a>
-          )}
+          {r.executor.phone && <PhoneAction phone={r.executor.phone} />}
           <div className="hint">
             Служебный номер. Виден только вам и только пока заявка открыта.
           </div>
