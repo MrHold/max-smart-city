@@ -322,6 +322,26 @@ p {
   background: var(--danger);
 }
 
+/* Экран «Контакты»: номер крупнее подписи, но строка остаётся компактной */
+.contact__phone {
+  align-self: flex-start;
+  margin: -6px 0;
+  padding: 6px 0;
+  gap: 6px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.contact__phone svg {
+  color: var(--ink-3);
+}
+.contact__note {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--danger-ink);
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
