@@ -246,6 +246,10 @@ html.demo .page {
   justify-content: space-between;
   gap: 12px;
 }
+/* Кнопка выше строки заголовка: без отступа она почти касается подзаголовка */
+.head__title-row + .head__sub {
+  margin-top: 8px;
+}
 .head__actions {
   display: flex;
   gap: 8px;
