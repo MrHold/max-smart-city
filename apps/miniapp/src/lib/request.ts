@@ -67,7 +67,8 @@ export function buildTimeline(status: RequestStatus, events: RequestEvent[]): Ti
         : state === 'todo'
           ? o.todo
           : o.label;
-    return { label, state, ...(ev ? { at: fmtDateTime(ev.at) } : {}) };
+    // У будущего шага нет времени: иначе после возврата видно время прошлого круга
+    return { label, state, ...(ev && state !== 'todo' ? { at: fmtDateTime(ev.at) } : {}) };
   });
 }
 
