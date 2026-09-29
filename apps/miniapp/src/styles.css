@@ -1,23 +1,22 @@
 /*
-  Визуальный язык: мягкий серый холст, белые карточки без обводок с крупным радиусом,
-  залитые серые строки-контейнеры внутри карточек, один акцент, сводка «строка — значение»
-  с итогом и липкая нижняя панель действия. Шрифт и акцент команды сохранены.
+  Визуальный язык «минимал»: белый холст, серые острова вместо карточек с рамками,
+  без теней и обводок, один акцент, кнопки-пилюли, крупный дисплейный заголовок,
+  списки хайрлайнами прямо на холсте. На широком экране контент по центру, как телефон.
 */
 :root {
-  --bg: #f4f5f7;
+  --bg: #ffffff;
+  --island: #f4f5f7;
+  --island-2: #e9ebee;
   --surface: #ffffff;
-  --inset: #f2f3f5;
-  --inset-2: #e8eaed;
-  --ink: #1a1d21;
+  --ink: #111318;
   --ink-2: #6b7280;
-  --ink-3: #9ca3af;
-  --line: #e5e7eb;
-  --line-2: #eef0f2;
-  --track: #e5e7eb;
-  --tile: #ffffff;
+  --ink-3: #a1a5ad;
+  --line: #ececef;
+  --line-2: #f1f2f4;
+  --track: #e4e6ea;
   --accent: #1d6a80;
   --accent-2: #165a6d;
-  --accent-soft: #e7f1f4;
+  --accent-soft: #e6f0f3;
   --accent-line: #b9d3db;
   --ok: #1f8a4c;
   --ok-soft: #e3f5ea;
@@ -26,15 +25,15 @@
   --danger-ink: #a52a1c;
   --warn-soft: #fff1d6;
   --warn-ink: #8a5a00;
-  --chip-soft: #eef0f3;
+  --chip-soft: #eceef1;
   --chip-ink: #4b5563;
-  --r-card: 20px;
-  --r-tile: 14px;
-  --r-btn: 14px;
-  --tabbar-h: 64px;
-  --shadow-card: 0 1px 2px rgba(17, 24, 39, 0.04), 0 4px 14px rgba(17, 24, 39, 0.04);
-  --shadow-bar: 0 -8px 24px rgba(17, 24, 39, 0.06);
-  --shadow-pop: 0 12px 32px rgba(17, 24, 39, 0.14), 0 0 0 1px rgba(17, 24, 39, 0.04);
+  --r-card: 24px;
+  --r-tile: 20px;
+  --r-input: 16px;
+  --r-btn: 999px;
+  --tabbar-h: 62px;
+  --shell-w: 560px;
+  --shadow-pop: 0 12px 32px rgba(17, 19, 24, 0.14), 0 0 0 1px rgba(17, 19, 24, 0.04);
 }
 
 * {
@@ -49,9 +48,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Manrope", "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 15px;
-  line-height: 1.4;
+  font-weight: 500;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
@@ -82,57 +82,67 @@ img {
   display: block;
 }
 
+/* Оболочка: на телефоне во всю ширину, на широком экране колонка по центру */
 .page {
+  width: 100%;
+  max-width: var(--shell-w);
+  margin: 0 auto;
   min-height: 100%;
-  padding: 16px 16px calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom, 0px));
+  padding: 20px 20px calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
 }
 .page--no-tabbar {
-  padding-bottom: 24px;
+  padding-bottom: 28px;
 }
 .page--with-cta {
-  padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 700px) {
+  .page {
+    padding-top: 32px;
+  }
 }
 
 /* Типографика */
 .caption {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink-2);
 }
 .eyebrow {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--ink);
 }
 .eyebrow--accent {
   color: var(--accent);
 }
 .h1 {
-  font-size: 24px;
-  line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
 }
 .h1--lg {
-  font-size: 26px;
+  font-size: 32px;
 }
 .h2 {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 .muted {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-2);
 }
 .hint {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-2);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .link-btn {
@@ -151,7 +161,7 @@ img {
   color: var(--accent);
   font: inherit;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 .back-link {
@@ -167,7 +177,7 @@ img {
 .stack-8 {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .row {
   display: flex;
@@ -188,26 +198,23 @@ img {
   flex-wrap: wrap;
 }
 
-/* Карточки: белые, без обводок, с мягкой тенью */
+/* Острова: серые блоки без рамок и теней */
 .card {
-  background: var(--surface);
+  background: var(--island);
   border: 0;
   border-radius: var(--r-card);
-  box-shadow: var(--shadow-card);
   color: var(--ink);
 }
 .card--pad {
-  padding: 16px;
+  padding: 18px;
 }
 .card--accent {
-  box-shadow:
-    var(--shadow-card),
-    inset 0 0 0 1.5px var(--accent-line);
+  background: var(--accent-soft);
 }
 .card__section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 a.card {
   transition:
@@ -215,38 +222,45 @@ a.card {
     background 0.12s ease;
 }
 a.card:active {
+  background: var(--island-2);
   transform: scale(0.99);
 }
+/* Список — без острова, строки на холсте с тонкими линиями */
+.card.list {
+  background: transparent;
+  border-radius: 0;
+}
 .list > * + * {
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--line);
 }
 .list-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 14px;
+  padding: 14px 0;
   color: var(--ink);
 }
 .list-item--link {
-  padding: 14px 16px;
+  padding: 16px 0;
 }
 .list-item--link:active {
-  background: var(--inset);
+  opacity: 0.7;
 }
 .list-item__title {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 .list-item__sub {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-2);
 }
 .status-line {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
 }
 .status-line--ok {
   color: var(--ok);
@@ -265,27 +279,27 @@ a.card:active {
   flex-shrink: 0;
 }
 
-/* Залитая строка внутри карточки: промокод, «свёрнутый» блок, переход */
+/* Строка-контейнер внутри острова: белая, с шевроном справа */
 .inset {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--r-tile);
-  background: var(--inset);
+  padding: 14px 16px;
+  border-radius: var(--r-input);
+  background: var(--surface);
   color: var(--ink);
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
   transition: background 0.15s;
 }
 .inset--link:active {
-  background: var(--inset-2);
+  background: var(--island-2);
 }
 .icon-sq {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  background: var(--surface);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--island);
   color: var(--accent);
   display: inline-flex;
   align-items: center;
@@ -310,44 +324,47 @@ a.card:active {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 7px 0;
+  padding: 8px 0;
   font-size: 14px;
 }
 .sum-row__label {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   min-width: 0;
   color: var(--ink);
 }
 .sum-row__value {
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .sum-row--total {
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--island-2);
   margin-top: 6px;
-  padding-top: 12px;
-  font-size: 17px;
-  font-weight: 700;
+  padding-top: 14px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 .sum-row--total .sum-row__value {
-  font-weight: 700;
+  font-weight: 800;
 }
 
-/* Кнопки */
+/* Кнопки-пилюли */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 48px;
-  padding: 0 18px;
+  height: 52px;
+  padding: 0 22px;
   border-radius: var(--r-btn);
   border: 0;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   transition:
     background 0.15s,
@@ -358,21 +375,18 @@ a.card:active {
   transform: scale(0.98);
 }
 .btn--lg {
-  height: 54px;
-  border-radius: 16px;
+  height: 56px;
   font-size: 16px;
 }
 .btn--sm {
-  height: 36px;
-  padding: 0 12px;
+  height: 38px;
+  padding: 0 16px;
   font-size: 14px;
-  border-radius: 10px;
 }
 .btn--xs {
-  height: 30px;
-  padding: 0 10px;
+  height: 32px;
+  padding: 0 12px;
   font-size: 13px;
-  border-radius: 8px;
 }
 .btn--primary {
   background: var(--accent);
@@ -382,13 +396,16 @@ a.card:active {
   background: var(--accent-2);
 }
 .btn--secondary {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--island);
+  color: var(--ink);
+}
+.card .btn--secondary {
+  background: var(--surface);
 }
 .btn--ghost {
-  background: var(--inset);
+  background: transparent;
   color: var(--ink);
-  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 .btn--danger {
   background: var(--danger);
@@ -398,7 +415,7 @@ a.card:active {
   width: 100%;
 }
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
   transform: none;
 }
@@ -417,8 +434,8 @@ a.card:active {
 }
 
 .call {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   border: 0;
   display: inline-flex;
@@ -433,8 +450,8 @@ a.card:active {
   transform: scale(0.94);
 }
 .call--outline {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--island);
+  color: var(--ink);
 }
 .call--danger {
   background: var(--danger);
@@ -445,8 +462,8 @@ a.card:active {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
+  font-weight: 700;
+  padding: 5px 11px;
   border-radius: 999px;
   white-space: nowrap;
   line-height: 1.3;
@@ -471,19 +488,22 @@ a.card:active {
   background: var(--chip-soft);
   color: var(--chip-ink);
 }
+.card .chip--neutral {
+  background: var(--surface);
+}
 .chip--xs {
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 3px 9px;
 }
 
 .banner {
-  border-radius: 16px;
-  padding: 12px 14px;
+  border-radius: var(--r-tile);
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .banner--warn {
   background: var(--warn-soft);
@@ -504,71 +524,81 @@ a.card:active {
   color: var(--accent-2);
 }
 
-/* Плитки выбора: белые с тонкой обводкой, выбранная — с акцентной */
+/* Плитки выбора: серые острова, выбранная залита акцентом */
 .tiles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 .tiles--2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .tile {
-  min-height: 88px;
+  min-height: 96px;
   border-radius: var(--r-tile);
-  border: 1px solid var(--line);
-  background: var(--tile);
+  border: 0;
+  background: var(--island);
   color: var(--ink);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 13px;
-  font-weight: 500;
-  padding: 8px 6px;
+  font-weight: 600;
+  padding: 10px 8px;
   text-align: center;
   line-height: 1.2;
   transition:
     transform 0.12s ease,
     background 0.12s ease,
-    border-color 0.12s ease;
+    color 0.12s ease;
 }
 .tile:active {
   transform: scale(0.97);
 }
 .tile svg {
   color: var(--accent);
+  width: 26px;
+  height: 26px;
 }
-.tile--on {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-  background: var(--accent-soft);
-  font-weight: 600;
+.card .tile {
+  background: var(--surface);
+}
+.tile--on,
+.card .tile--on {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.tile--on svg {
+  color: #fff;
 }
 .tile--short {
-  min-height: 56px;
+  min-height: 58px;
 }
 
-/* На сером холсте плашка белая, внутри белой карточки — залитая */
+/* Плашка показателя: остров на холсте, белая внутри острова */
 .stat {
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-  border-radius: var(--r-tile);
-  padding: 10px 12px;
+  background: var(--island);
+  border-radius: var(--r-input);
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
+.card .stat {
+  background: var(--surface);
+}
 .stat__value {
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 .stat__value--sm {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
 }
 .stat__label {
   font-size: 12px;
@@ -577,24 +607,25 @@ a.card:active {
 .stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 .stats--3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .money {
-  font-size: 32px;
-  font-weight: 700;
+  font-size: 40px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
 }
 .money--sm {
-  font-size: 20px;
+  font-size: 22px;
+  letter-spacing: -0.02em;
 }
 
-/* Поля: залитые, без обводки */
+/* Поля: серые на холсте, белые внутри острова, без обводок */
 .field {
   display: flex;
   flex-direction: column;
@@ -609,14 +640,15 @@ a.card:active {
 .textarea,
 .select {
   width: 100%;
-  min-height: 50px;
-  padding: 12px 14px;
-  border-radius: var(--r-tile);
+  min-height: 52px;
+  padding: 14px 16px;
+  border-radius: var(--r-input);
   border: 0;
-  background: var(--inset);
+  background: var(--island);
   color: var(--ink);
   /* 16px: меньше — iOS приближает страницу при фокусе */
   font-size: 16px;
+  font-weight: 500;
   transition: box-shadow 0.12s;
 }
 .input::placeholder,
@@ -631,50 +663,49 @@ a.card:active {
 }
 .textarea {
   resize: vertical;
-  min-height: 92px;
+  min-height: 96px;
 }
 .input--unit {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .input--unit .input {
   flex-grow: 1;
 }
 .input--unit span {
   color: var(--ink-2);
-  font-weight: 500;
+  font-weight: 600;
 }
 .field__error {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--danger-ink);
 }
 
+/* Переключатель: пилюля, выбранное — тёмное */
 .segmented {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  background: var(--inset);
-  border-radius: var(--r-tile);
-  padding: 3px;
-  gap: 3px;
+  background: var(--island);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 4px;
 }
 .segmented__btn {
   height: 38px;
   border: 0;
-  border-radius: 11px;
+  border-radius: 999px;
   background: transparent;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink-2);
   transition:
     background 0.15s,
-    box-shadow 0.15s;
+    color 0.15s;
 }
 .segmented__btn--on {
-  background: var(--surface);
-  font-weight: 600;
-  color: var(--ink);
-  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.1);
+  background: var(--ink);
+  color: #fff;
 }
 
 .progress {
@@ -683,8 +714,8 @@ a.card:active {
   gap: 6px;
 }
 .progress__bar {
-  height: 4px;
-  border-radius: 2px;
+  height: 5px;
+  border-radius: 999px;
   background: var(--track);
   transition: background 0.2s;
 }
@@ -698,7 +729,7 @@ a.card:active {
 }
 .tl {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 .tl__rail {
   display: flex;
@@ -709,7 +740,7 @@ a.card:active {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 2px solid var(--line);
+  border: 2px solid var(--track);
   background: var(--surface);
   display: flex;
   align-items: center;
@@ -729,14 +760,14 @@ a.card:active {
   width: 2px;
   flex-grow: 1;
   background: var(--track);
-  min-height: 16px;
+  min-height: 18px;
 }
 .tl__line--done {
   background: var(--ok);
 }
 .tl__body {
-  padding-bottom: 10px;
-  font-size: 14px;
+  padding-bottom: 12px;
+  font-size: 15px;
 }
 .tl__body--todo {
   color: var(--ink-2);
@@ -745,7 +776,7 @@ a.card:active {
   color: var(--accent);
 }
 .tl__body strong {
-  font-weight: 600;
+  font-weight: 700;
 }
 .tl__body time {
   color: var(--ink-2);
@@ -753,16 +784,16 @@ a.card:active {
 }
 
 .avatar {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   flex-shrink: 0;
 }
 .avatar--sm {
@@ -771,10 +802,10 @@ a.card:active {
   font-size: 12px;
 }
 .thumb {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--r-tile);
-  background: var(--inset);
+  width: 76px;
+  height: 76px;
+  border-radius: var(--r-input);
+  background: var(--island-2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -789,15 +820,15 @@ a.card:active {
 }
 .photos {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 .photo-add {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--r-tile);
+  width: 76px;
+  height: 76px;
+  border-radius: var(--r-input);
   border: 0;
-  background: var(--inset);
+  background: var(--island);
   color: var(--accent);
   display: flex;
   flex-direction: column;
@@ -805,21 +836,28 @@ a.card:active {
   justify-content: center;
   gap: 2px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
+.card .photo-add {
+  background: var(--surface);
+}
 
-/* Нижняя панель действия и таббар: белые, с тенью вверх, без обводок */
+/* Нижняя панель действия и таббар: белые, тонкая линия сверху, по центру на широком экране */
 .cta {
   position: fixed;
-  left: 0;
-  right: 0;
+  left: 50%;
   bottom: 0;
-  padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-  background: var(--surface);
-  box-shadow: var(--shadow-bar);
+  width: 100%;
+  max-width: var(--shell-w);
+  transform: translateX(-50%);
+  padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--line);
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 .cta .btn {
   flex-grow: 1;
@@ -827,25 +865,29 @@ a.card:active {
 
 .tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
+  left: 50%;
   bottom: 0;
+  width: 100%;
+  max-width: var(--shell-w);
+  transform: translateX(-50%);
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
-  background: var(--surface);
-  box-shadow: var(--shadow-bar);
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--line);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 8px calc(6px + env(safe-area-inset-bottom, 0px));
 }
 .tab {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   font-size: 11px;
-  font-weight: 500;
-  color: var(--ink-2);
+  font-weight: 600;
+  color: var(--ink-3);
   border-radius: 12px;
   transition: color 0.12s;
 }
@@ -854,8 +896,7 @@ a.card:active {
   height: 24px;
 }
 .tab--on {
-  color: var(--accent);
-  font-weight: 600;
+  color: var(--ink);
 }
 
 .center {
@@ -877,7 +918,7 @@ a.card:active {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 3px solid var(--line);
+  border: 3px solid var(--island-2);
   border-top-color: var(--accent);
   animation: spin 0.8s linear infinite;
 }
@@ -913,7 +954,7 @@ a.card:active {
 .demo-clock {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .demo-clock__row {
   display: flex;
@@ -925,10 +966,10 @@ a.card:active {
   right: 6px;
   z-index: 10;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 3px 7px;
+  padding: 3px 8px;
   border-radius: 999px;
   background: var(--warn-soft);
   color: var(--warn-ink);
@@ -939,17 +980,17 @@ a.card:active {
   flex-direction: column;
 }
 .steps-list > * + * {
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--line);
 }
 .step-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 0;
+  padding: 9px 0;
   font-size: 14px;
 }
 .step-row__value {
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -967,8 +1008,8 @@ a.card:active {
   z-index: 11;
   font: inherit;
   font-size: 12px;
-  font-weight: 600;
-  padding: 6px 11px;
+  font-weight: 700;
+  padding: 6px 12px;
   border: 0;
   border-radius: 999px;
   background: var(--danger-soft);
@@ -982,19 +1023,19 @@ a.card:active {
   right: 6px;
   max-width: 420px;
   z-index: 11;
-  padding: 14px;
+  padding: 16px;
   border-radius: var(--r-card);
   background: var(--surface);
   box-shadow: var(--shadow-pop);
 }
 
-/* Кабинет диспетчера */
+/* Кабинет диспетчера: широкая оболочка */
 .page.cab {
   max-width: 1120px;
 }
 .cab__grid {
   display: grid;
-  gap: 16px;
+  gap: 20px;
   align-items: start;
 }
 .cab__grid--wide {
@@ -1004,24 +1045,28 @@ a.card:active {
   position: sticky;
   top: 12px;
 }
+.cluster-row {
+  border-radius: var(--r-input);
+  padding-left: 12px;
+  padding-right: 12px;
+  margin: 0 -12px;
+}
 .cluster-row--on {
-  box-shadow: inset 3px 0 0 var(--accent);
-  background: var(--accent-soft);
+  background: var(--island);
 }
 .exec-option {
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 10px 12px;
-  border-radius: var(--r-tile);
+  padding: 12px 14px;
+  border-radius: var(--r-input);
   border: 0;
-  background: var(--inset);
+  background: var(--surface);
   cursor: pointer;
   font-size: 14px;
 }
 .exec-option--on {
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 .exec-option--off {
   cursor: not-allowed;
@@ -1033,7 +1078,7 @@ a.card:active {
 
 /* Плашка демо-часов закреплена сверху: сдвигаем содержимое, чтобы она не закрывала заголовок */
 html.demo .page {
-  padding-top: calc(16px + 32px + env(safe-area-inset-top));
+  padding-top: calc(20px + 32px + env(safe-area-inset-top));
 }
 
 /* Миниатюра-кнопка: открывает фото крупно */
@@ -1050,7 +1095,7 @@ html.demo .page {
   z-index: 100;
   border: 0;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.88);
+  background: rgba(0, 0, 0, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1060,7 +1105,7 @@ html.demo .page {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: var(--r-tile);
+  border-radius: var(--r-input);
 }
 
 /* Кнопка с суммой слева и действием справа: после базовых правил кнопок */
@@ -1074,10 +1119,12 @@ html.demo .page {
   font-variant-numeric: tabular-nums;
 }
 .btn--secondary .btn__value {
-  border-right-color: var(--accent-line);
+  border-right-color: var(--island-2);
 }
 
-.card .stat {
-  background: var(--inset);
-  box-shadow: none;
+/* Поля внутри острова белые: после базовых правил полей */
+.card .input,
+.card .textarea,
+.card .select {
+  background: var(--surface);
 }
