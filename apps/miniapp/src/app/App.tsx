@@ -53,6 +53,9 @@ export function DeepLinkRedirect() {
     const id = rest.join('_');
     if (kind === 'r' && id) navigate(`/join/${id}`, { replace: true });
     else if (kind === 'req' && id) navigate(`/requests/${id}`, { replace: true });
+    // Диспетчеру из уведомления «Исполнитель отказался»: сразу к группе с этой заявкой
+    else if (kind === 'disp' && id)
+      navigate(`/dispatcher?request=${encodeURIComponent(id)}`, { replace: true });
   }, [navigate]);
   return null;
 }

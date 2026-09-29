@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDispatcherInbox, useMe } from '../../api/hooks';
 import type { ClusterCard, DispatcherInbox as Inbox } from '../../api/types';
 import { useBackButton } from '../../bridge/back';
@@ -149,6 +149,14 @@ export function DispatcherInbox() {
   const wide = useMediaQuery('(min-width: 900px)');
   const isDispatcher = me.data?.role === 'dispatcher';
   const inbox = useDispatcherInbox(isDispatcher);
+  // disp_<id>: открыть группу, в которой лежит заявка, чтобы назначить другого исполнителя
+  const [params] = useSearchParams();
+  const wanted = params.get('request');
+  useEffect(() => {
+    if (!wanted || key || !inbox.data) return;
+    const c = inbox.data.clusters.find((x) => x.requestIds.includes(wanted));
+    navigate(c ? `/dispatcher/c/${encodeURIComponent(c.key)}` : '/dispatcher', { replace: true });
+  }, [wanted, key, inbox.data, navigate]);
   useBackButton(() => navigate(key || executorsTab ? '/dispatcher' : '/'));
 
   if (me.isPending) return <Loading />;
