@@ -26,7 +26,7 @@ export function Profile() {
 
   return (
     <main className="page">
-      <PageHeader hero title="Профиль" subtitle="Вход по аккаунту MAX, без регистрации" />
+      <PageHeader hero title="Профиль" />
 
       <div className="stack-8">
         <h2 className="h2">Мой дом</h2>
