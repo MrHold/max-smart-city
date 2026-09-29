@@ -264,30 +264,6 @@ export function Spot({
   );
 }
 
-/** Плитка быстрого действия в горизонтальной ленте */
-export function QuickTile({
-  to,
-  icon,
-  label,
-  tone,
-  primary,
-}: {
-  to: string;
-  icon: ReactNode;
-  label: string;
-  tone?: 'ok' | 'warn' | 'neutral';
-  primary?: boolean;
-}) {
-  return (
-    <Link to={to} className={cx('qt', primary && 'qt--primary')}>
-      <span className={cx('qt__icon', tone && `qt__icon--${tone}`)} aria-hidden="true">
-        {icon}
-      </span>
-      {label}
-    </Link>
-  );
-}
-
 /** Строка-переход: иконка, заголовок с подписью, значение справа и шеврон */
 export function RowLink({
   to,

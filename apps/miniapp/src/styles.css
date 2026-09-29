@@ -419,71 +419,6 @@ a.card:active {
   flex-shrink: 0;
 }
 
-/* Плитки быстрых действий: горизонтальная лента */
-.qt-row {
-  display: flex;
-  gap: 10px;
-  /* Нижний запас под тень главной плитки: лента с прокруткой её обрезает */
-  margin: 0 -16px -12px;
-  padding: 2px 16px 16px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 16px;
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-}
-.qt-row::-webkit-scrollbar {
-  display: none;
-}
-.qt {
-  flex: 0 0 108px;
-  min-height: 108px;
-  padding: 12px;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 10px;
-  scroll-snap-align: start;
-  background: var(--bg-soft);
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.25;
-  transition: transform 0.12s ease;
-}
-.qt:active {
-  transform: scale(0.97);
-}
-.qt__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface);
-  color: var(--brand-600);
-}
-.qt__icon--ok {
-  color: var(--ok-ink);
-}
-.qt__icon--warn {
-  color: var(--warn-ink);
-}
-.qt__icon--neutral {
-  color: var(--neutral-ink);
-}
-.qt--primary {
-  background: var(--brand-600);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(42, 87, 222, 0.24);
-}
-.qt--primary .qt__icon {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-}
-
 /* Квартира в шапке главной */
 .flat {
   display: flex;
@@ -1573,7 +1508,6 @@ a.card:active {
 .tile:focus-visible,
 .tab:focus-visible,
 .call:focus-visible,
-.qt:focus-visible,
 .row-link:focus-visible,
 .link-btn:focus-visible,
 .back-link:focus-visible,
@@ -1619,7 +1553,6 @@ a.card:focus-visible,
   }
   .btn,
   .tile,
-  .qt,
   .call,
   a.card,
   .head__back,
@@ -1628,7 +1561,6 @@ a.card:focus-visible,
   }
   .btn:active,
   .tile:active,
-  .qt:active,
   .call:active,
   a.card:active,
   .head__back:active,
@@ -1686,12 +1618,6 @@ a.card:focus-visible,
     box-shadow:
       0 2px 4px rgba(18, 26, 43, 0.05),
       0 10px 24px rgba(18, 26, 43, 0.08);
-  }
-  .qt:hover {
-    background: var(--brand-50);
-  }
-  .qt--primary:hover {
-    background: var(--brand-700);
   }
   .tile:not(.tile--on):hover {
     border-color: var(--brand-200);

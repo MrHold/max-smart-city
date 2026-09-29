@@ -3,7 +3,6 @@ import { useHome, useMe, useMyRequests, useRequest } from '../../api/hooks';
 import { fmtDate } from '../../lib/format';
 import { closedStatuses } from '../../lib/request';
 import {
-  Avatar,
   ButtonLink,
   CallButton,
   Card,
@@ -12,18 +11,9 @@ import {
   formatRub,
   Loading,
   PageHeader,
-  QuickTile,
   SectionHeader,
 } from '../../ui';
-import {
-  IconBuilding,
-  IconChevron,
-  IconList,
-  IconPlus,
-  IconUser,
-  IconUsers,
-  IconWarning,
-} from '../../ui/icons';
+import { IconBuilding, IconChevron, IconPlus, IconWarning } from '../../ui/icons';
 import { RequestRow } from './RequestRow';
 
 function greeting(d = new Date()): string {
@@ -66,13 +56,9 @@ export function Home() {
 
   return (
     <main className="page">
-      <PageHeader
-        hero
-        leading={<Avatar hero name={name} photoUrl={me.data.user.photoUrl} />}
-        eyebrow={greeting()}
-        title={name}
-      />
+      <PageHeader hero eyebrow={greeting()} title={name} />
 
+      {/* Разделы уже есть в таббаре — здесь только главное действие */}
       <Card className="card__section">
         <Link to="/house" className="flat">
           <div className="grow stack">
@@ -81,15 +67,15 @@ export function Home() {
           </div>
           <IconChevron size={20} className="chev" />
         </Link>
-        <nav className="qt-row" aria-label="Быстрые действия">
-          <QuickTile primary to="/requests/new" icon={<IconPlus />} label="Сообщить о проблеме" />
-          <QuickTile to="/requests" icon={<IconList />} label="Мои заявки" />
-          {me.data.role === 'dispatcher' && (
-            <QuickTile to="/dispatcher" icon={<IconUsers />} label="Кабинет УК" tone="warn" />
-          )}
-          <QuickTile to="/house" icon={<IconBuilding />} label="Паспорт дома" tone="ok" />
-          <QuickTile to="/profile/data" icon={<IconUser />} label="Мои данные" tone="neutral" />
-        </nav>
+        <ButtonLink to="/requests/new" size="lg" stretched>
+          <IconPlus size={20} />
+          Сообщить о проблеме
+        </ButtonLink>
+        {me.data.role === 'dispatcher' && (
+          <ButtonLink to="/dispatcher" variant="secondary" stretched>
+            Кабинет диспетчера
+          </ButtonLink>
+        )}
       </Card>
 
       <div className="duo">
