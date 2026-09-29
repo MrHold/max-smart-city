@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useJoinRequest, useMe, useRequest } from '../api/hooks';
 import type { MeasurementPlace } from '../api/types';
 import { useBackButton } from '../bridge/back';
+import { demoClock } from '../clock';
 import { fmtDateTime, parseTemp, plural } from '../lib/format';
 import { Button, Card, ErrorView, Field, Loading, PageHeader, Tile } from '../ui';
 import { IconUsers } from '../ui/icons';
@@ -35,6 +36,8 @@ export function JoinRequest() {
   if (r.isAuthor || !r.canJoin) return <Navigate to={`/requests/${id}`} replace />;
   const label = apartment || me.data?.apartmentLabel || '';
   const needsTemp = r.kind === 'utility_quality';
+  const isHotWater = r.service === 'hot_water';
+  const [tMin, tMax] = isHotWater ? [0, 100] : [-30, 45];
 
   const submit = async () => {
     if (!label) return setError('Укажите номер квартиры');
@@ -42,8 +45,8 @@ export function JoinRequest() {
       return setError('Номер квартиры — от 1 до 9999');
     }
     const t = parseTemp(temp);
-    if (needsTemp && temp !== '' && (t === null || t < -30 || t > 45))
-      return setError('Температура — число от −30 до +45');
+    if (needsTemp && temp !== '' && (t === null || t < tMin || t > tMax))
+      return setError(`Температура — число от ${tMin < 0 ? `−${-tMin}` : tMin} до +${tMax}`);
     try {
       await join.mutateAsync({
         apartmentLabel: label.startsWith('кв') ? label : `кв. ${label}`,
@@ -53,8 +56,8 @@ export function JoinRequest() {
                 {
                   value: t as number,
                   unit: 'celsius',
-                  measuredAt: new Date().toISOString(),
-                  place,
+                  measuredAt: demoClock.now().toISOString(),
+                  place: isHotWater ? 'tap' : place,
                 },
               ]
             : [],
@@ -126,14 +129,16 @@ export function JoinRequest() {
             />
             <span>°C</span>
           </div>
-          <div className="tiles tiles--2">
-            <Tile short on={place === 'room'} onClick={() => setPlace('room')}>
-              Комната
-            </Tile>
-            <Tile short on={place === 'corner_room'} onClick={() => setPlace('corner_room')}>
-              Угловая
-            </Tile>
-          </div>
+          {!isHotWater && (
+            <div className="tiles tiles--2">
+              <Tile short on={place === 'room'} onClick={() => setPlace('room')}>
+                Комната
+              </Tile>
+              <Tile short on={place === 'corner_room'} onClick={() => setPlace('corner_room')}>
+                Угловая
+              </Tile>
+            </div>
+          )}
         </Card>
       )}
       {error && (

@@ -265,6 +265,7 @@ export function useBecomeDispatcher() {
   return useMutation({
     mutationFn: () =>
       api<{ role: Role; orgId: string; orgName: string }>('/api/demo/dispatcher', json({})),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.me }),
+    // Дождаться новой роли: иначе переход в кабинет на миг покажет «нет роли диспетчера»
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
   });
 }

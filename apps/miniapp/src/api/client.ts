@@ -39,7 +39,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (res.status === 204) return undefined as T;
 
   const text = await res.text();
-  const body = text ? (JSON.parse(text) as unknown) : null;
+  let body: unknown = null;
+  try {
+    body = text ? (JSON.parse(text) as unknown) : null;
+  } catch {
+    // HTML от прокси (502/504 во время выкладки) — не SyntaxError, а понятная ошибка
+    throw new ApiError('http_error', `Сервер недоступен (${res.status})`, res.status);
+  }
   if (!res.ok) {
     const err = (body as ApiErrorBody | null)?.error;
     throw new ApiError(

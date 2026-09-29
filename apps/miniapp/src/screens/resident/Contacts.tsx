@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useHome, useMe } from '../../api/hooks';
 import type { Contact, Schedule } from '../../api/types';
 import { useBackButton } from '../../bridge/back';
-import { CallButton, Card, ErrorView, Loading, PageHeader, Stat } from '../../ui';
+import { CallButton, Card, copyText, ErrorView, Loading, PageHeader, Stat } from '../../ui';
 import { IconCheck, IconCopy } from '../../ui/icons';
 
 const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -18,11 +18,9 @@ function scheduleText(s: Schedule | null): string {
 function PhoneCopy({ phone }: { phone: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(phone);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {}
+    if (!(await copyText(phone))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
   return (
     <button

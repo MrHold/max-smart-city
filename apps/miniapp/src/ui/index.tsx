@@ -499,6 +499,8 @@ export function ErrorView({
 }) {
   // Протухшая initData не лечится повтором: MAX выдаст новую только при повторном открытии
   const expired = error instanceof ApiError && error.status === 401;
+  // «Нет доступа», «не найдено» повтором не исправить: вместо него — выход на главную
+  const final = error instanceof ApiError && error.status >= 400 && error.status < 500;
   return (
     <div className="center" role="alert">
       <Spot tone="danger" icon={<IconWarning size={34} />} />
@@ -508,10 +510,15 @@ export function ErrorView({
       <div className="muted">
         {expired ? 'Сессия MAX истекла. Закройте мини-приложение и откройте его снова.' : message}
       </div>
-      {onRetry && !expired && (
+      {onRetry && !final && (
         <Button variant="secondary" onClick={onRetry}>
           Повторить
         </Button>
+      )}
+      {!expired && (
+        <ButtonLink to="/" variant={onRetry && !final ? 'ghost' : 'secondary'}>
+          На главную
+        </ButtonLink>
       )}
     </div>
   );

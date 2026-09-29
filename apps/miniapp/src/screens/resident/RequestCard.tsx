@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useConfirmRequest, useOpenDocument, useRequest } from '../../api/hooks';
 import type { Liability, RequestDetail } from '../../api/types';
 import { shareToMax } from '../../bridge';
@@ -246,7 +246,9 @@ export function RequestCard() {
   const confirm = useConfirmRequest(id ?? '');
   const doc = useOpenDocument();
   useDemoOffset();
-  useBackButton(() => navigate('/requests'));
+  // Из кабинета диспетчера — обратно к группе, а не в список жителя
+  const back = (useLocation().state as { back?: string } | null)?.back ?? '/requests';
+  useBackButton(() => navigate(back));
 
   if (q.isPending) return <Loading />;
   if (q.isError)
@@ -264,7 +266,7 @@ export function RequestCard() {
     <main className="page">
       <PageHeader
         hero
-        backTo="/requests"
+        backTo={back}
         eyebrow={`Заявка № ${r.number} от ${fmtDateTime(r.createdAt)}`}
         title={r.title}
       >

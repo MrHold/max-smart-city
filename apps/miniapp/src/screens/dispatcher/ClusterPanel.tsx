@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   type DispatcherAction,
   useDispatcherAction,
@@ -68,7 +68,7 @@ function defaultPlanned(): string {
   return toLocalInputValue(d);
 }
 
-function AssignForm({ c, act }: { c: ClusterCard; act: Act }) {
+function AssignForm({ c, act, onCancel }: { c: ClusterCard; act: Act; onCancel?: () => void }) {
   const executors = useExecutors();
   const [executorId, setExecutorId] = useState<string | null>(null);
   const [planned, setPlanned] = useState(defaultPlanned);
@@ -179,6 +179,11 @@ function AssignForm({ c, act }: { c: ClusterCard; act: Act }) {
             Отклонить с причиной
           </button>
         ))}
+      {onCancel && (
+        <button type="button" className="link-btn" onClick={onCancel}>
+          Оставить прежнего исполнителя
+        </button>
+      )}
     </Card>
   );
 }
@@ -198,6 +203,8 @@ function ExecutorInfo({ c }: { c: ClusterCard }) {
 /** Назначен, но ещё не приступил: закрыть можно только начатую работу. */
 function StartForm({ c, act }: { c: ClusterCard; act: Act }) {
   const who = c.executor?.nameShort ?? 'исполнитель';
+  const [reassign, setReassign] = useState(false);
+  if (reassign) return <AssignForm c={c} act={act} onCancel={() => setReassign(false)} />;
   return (
     <Card className="card__section">
       <div className="eyebrow">Исполнитель</div>
@@ -217,6 +224,9 @@ function StartForm({ c, act }: { c: ClusterCard; act: Act }) {
         Если договорились по телефону или исполнитель не пользуется ботом. Жители получат
         уведомление, что работа началась.
       </div>
+      <button type="button" className="link-btn" onClick={() => setReassign(true)}>
+        Назначить другого исполнителя
+      </button>
     </Card>
   );
 }
@@ -256,7 +266,11 @@ function CompleteForm({ c, act }: { c: ClusterCard; act: Act }) {
                 type="file"
                 accept="image/*"
                 hidden
-                onChange={(e) => void onPhoto(e.target.files)}
+                disabled={upload.isPending}
+                onChange={(e) => {
+                  void onPhoto(e.target.files);
+                  e.target.value = '';
+                }}
               />
             </label>
           )}
@@ -348,6 +362,7 @@ export function ClusterPanel({
 }) {
   useDemoOffset();
   const act = useDispatcherAction();
+  const location = useLocation();
 
   if (loading) return <Loading />;
 
@@ -430,7 +445,12 @@ export function ClusterPanel({
         <div className="eyebrow">Заявки жителей</div>
         <div className="row wrap" style={{ gap: 8 }}>
           {c.requestIds.map((id, i) => (
-            <Link key={id} to={`/requests/${id}`} className="btn btn--secondary btn--sm">
+            <Link
+              key={id}
+              to={`/requests/${id}`}
+              state={{ back: location.pathname }}
+              className="btn btn--secondary btn--sm"
+            >
               Заявка {i + 1}
             </Link>
           ))}
