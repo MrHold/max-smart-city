@@ -31,6 +31,11 @@ export const IconPlus = ({ size, ...r }: P) => (
     <path d="M12 5v14M5 12h14" />
   </Svg>
 );
+export const IconClose = ({ size, ...r }: P) => (
+  <Svg size={size} {...r} strokeWidth={2.4}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </Svg>
+);
 export const IconHome = ({ size, ...r }: P) => (
   <Svg size={size} {...r}>
     <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />

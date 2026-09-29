@@ -34,27 +34,50 @@ export const categoryTitle = (code: unknown): string | null =>
 
 export type OrderInfo = {
   number?: unknown;
+  /** Все заявки наряда, если их несколько: одна проблема в доме — один наряд. */
+  numbers?: string[];
   address?: unknown;
+  /** Сколько квартир затронуто: авторы заявок и присоединившиеся соседи. */
+  apartments?: number;
   category?: unknown;
   categoryTitle?: unknown;
   description?: unknown;
   plannedAt?: unknown;
 };
 
+const apartmentsWord = (n: number): string => {
+  const d = n % 10;
+  const dd = n % 100;
+  if (d === 1 && dd !== 11) return 'квартира';
+  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return 'квартиры';
+  return 'квартир';
+};
+
+function numbersLine(numbers: string[]): string | null {
+  if (numbers.length === 0) return null;
+  const shown = numbers.slice(0, 3).map((n) => `№${n}`);
+  const rest = numbers.length - shown.length;
+  const label = numbers.length === 1 ? 'Заявка' : 'Заявки';
+  return `${label}: ${shown.join(', ')}${rest > 0 ? ` и ещё ${rest}` : ''}`;
+}
+
 /**
- * Карточка наряда: куда, что и когда. Одна и та же в первом наряде и после каждого
- * нажатия кнопок — исполнитель на любом шаге видит адрес и плановое время.
+ * Карточка наряда: что, куда и когда — коротко, чтобы читалась в уведомлении.
+ * Одна и та же в первом наряде и после каждого нажатия кнопок.
  */
 export function orderCard(p: OrderInfo): string {
-  const no = p.number ? `№${p.number}` : '';
   const when = formatDate(p.plannedAt);
   const what = categoryTitle(p.categoryTitle ?? p.category);
+  const address = typeof p.address === 'string' && p.address ? p.address : null;
+  const scale =
+    p.apartments && p.apartments > 1 ? ` · ${p.apartments} ${apartmentsWord(p.apartments)}` : '';
+  const numbers = p.numbers ?? (typeof p.number === 'string' && p.number ? [p.number] : []);
   return [
-    `🛠 Наряд по заявке ${no}`,
-    typeof p.address === 'string' && p.address ? `Адрес: ${p.address}` : null,
-    what ? `Что: ${what}` : null,
-    typeof p.description === 'string' && p.description ? `Описание: ${p.description}` : null,
-    when ? `Плановое время: ${when}` : null,
+    `🛠 ${what ?? 'Наряд'}`,
+    address ? `📍 ${address}${scale}` : null,
+    when ? `🕙 ${when}` : null,
+    typeof p.description === 'string' && p.description ? `💬 ${p.description}` : null,
+    numbersLine(numbers),
   ]
     .filter((line): line is string => line !== null)
     .join('\n');
