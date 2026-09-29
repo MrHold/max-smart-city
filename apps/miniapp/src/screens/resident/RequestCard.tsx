@@ -5,7 +5,7 @@ import type { Liability, RequestDetail } from '../../api/types';
 import { ensureWebApp } from '../../bridge';
 import { useBackButton } from '../../bridge/back';
 import { demoClock, useDemoOffset } from '../../clock';
-import { fmtDate, fmtDateTime, fmtDuration, initials, plural } from '../../lib/format';
+import { fmtDate, fmtDateTime, fmtDuration, plural } from '../../lib/format';
 import {
   buildTimeline,
   closedStatuses,
@@ -27,7 +27,7 @@ import {
   Stat,
   Timeline,
 } from '../../ui';
-import { IconClock, IconCopy, IconShare, IconUsers } from '../../ui/icons';
+import { IconClock, IconCopy, IconShare, IconUser, IconUsers } from '../../ui/icons';
 
 type Photo = RequestDetail['photos'][number];
 
@@ -294,17 +294,23 @@ export function RequestCard() {
       {r.isAuthor && r.kind !== 'emergency' && !closed && <ShareBlock r={r} />}
 
       {r.executor && (
-        <Card className="card__section card--accent">
-          <div className="eyebrow eyebrow--accent">Исполнитель</div>
+        <Card className="card__section">
+          <div className="eyebrow">Исполнитель</div>
           <div className="row" style={{ gap: 12 }}>
-            <div className="avatar">{initials(r.executor.nameShort)}</div>
+            <span className="icon-sq" aria-hidden="true">
+              <IconUser size={20} />
+            </span>
             <div className="stack">
               <div style={{ fontSize: 16, fontWeight: 600 }}>{r.executor.nameShort}</div>
               {r.executor.slot && <div className="muted num">Придёт {r.executor.slot}</div>}
             </div>
           </div>
+          {/* Вторичная: главное действие на экране — позвать соседей */}
           {r.executor.phone && (
-            <a className="btn btn--primary" href={`tel:${r.executor.phone.replace(/[^\d+]/g, '')}`}>
+            <a
+              className="btn btn--secondary"
+              href={`tel:${r.executor.phone.replace(/[^\d+]/g, '')}`}
+            >
               Позвонить
             </a>
           )}

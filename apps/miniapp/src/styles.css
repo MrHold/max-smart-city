@@ -419,40 +419,23 @@ a.card:active {
   flex-shrink: 0;
 }
 
-/* Квартира в шапке главной */
-.flat {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ink);
-}
-.flat__title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-}
-
-/* Пара карточек-статусов */
+/* Две кнопки или карточки в ряд */
 .duo {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.status-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  color: var(--ink);
+
+/* Перерасчёт на главной: знак рубля вместо иконки и сумма справа */
+.icon-sq__glyph {
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1;
 }
-.status-card__title {
-  font-size: 15px;
-  font-weight: 700;
-}
-.status-card__cap {
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--ink-2);
+.row-link__money {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ok-ink);
 }
 
 /* Объявление и аварийная служба */
@@ -575,15 +558,9 @@ a.card:active {
   color: #fff;
   box-shadow: var(--shadow-brand);
 }
-.btn--primary:hover {
-  background: var(--brand-700);
-}
 .btn--secondary {
   background: var(--brand-50);
   color: var(--brand-600);
-}
-.btn--secondary:hover {
-  background: var(--brand-100);
 }
 .btn--ghost {
   background: var(--surface);
@@ -824,6 +801,9 @@ a.card:active {
 .stat__label {
   font-size: 12px;
   color: var(--ink-2);
+}
+.stat--danger .stat__value {
+  color: var(--danger-ink);
 }
 .stats {
   display: grid;
@@ -1614,6 +1594,12 @@ a.card:focus-visible,
 
 /* Наведение — только там, где есть мышь: на телефоне состояние «залипает» */
 @media (hover: hover) {
+  .btn--primary:hover {
+    background: var(--brand-700);
+  }
+  .btn--secondary:hover {
+    background: var(--brand-100);
+  }
   a.card:hover {
     box-shadow:
       0 2px 4px rgba(18, 26, 43, 0.05),

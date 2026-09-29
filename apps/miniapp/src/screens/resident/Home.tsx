@@ -1,28 +1,24 @@
 import { Link, Navigate } from 'react-router-dom';
 import { useHome, useMe, useMyRequests, useRequest } from '../../api/hooks';
-import { fmtDate } from '../../lib/format';
 import { closedStatuses } from '../../lib/request';
 import {
   ButtonLink,
   CallButton,
   Card,
-  Chip,
   ErrorView,
   formatRub,
   Loading,
   PageHeader,
+  RowLink,
   SectionHeader,
 } from '../../ui';
-import { IconBuilding, IconChevron, IconPlus, IconWarning } from '../../ui/icons';
+import { IconBuilding, IconPlus, IconUsers, IconWarning } from '../../ui/icons';
 import { RequestRow } from './RequestRow';
 
-function greeting(d = new Date()): string {
-  const h = d.getHours();
-  if (h < 5) return 'Доброй ночи';
-  if (h < 12) return 'Доброе утро';
-  if (h < 18) return 'Добрый день';
-  if (h < 23) return 'Добрый вечер';
-  return 'Доброй ночи';
+/** «Казань, ул. Садовая, 12» → город в надзаголовок, улицу с домом крупно */
+function splitAddress(address: string): [string, string] {
+  const i = address.indexOf(', ');
+  return i > 0 ? [address.slice(0, i), address.slice(i + 2)] : ['', address];
 }
 
 export function Home() {
@@ -42,13 +38,8 @@ export function Home() {
     );
   if (!me.data.house) return <Navigate to="/bind" replace />;
 
-  const name = me.data.user.firstName || 'сосед';
+  const [city, street] = splitAddress(me.data.house.address);
   const aptNo = (me.data.apartmentLabel ?? '').replace(/^кв\.?\s*/i, '');
-  const overdue = active.filter((r) => r.overdue).length;
-  const nearestDue = active
-    .map((r) => r.dueAt)
-    .sort()
-    .at(0);
   const kopecks = detail.data?.liability?.apartmentKopecks ?? 0;
   const dispatcher = home.data?.contacts.find((c) => c.kind === 'dispatcher');
   const emergency = home.data?.contacts.find((c) => c.kind === 'emergency');
@@ -56,71 +47,65 @@ export function Home() {
 
   return (
     <main className="page">
-      <PageHeader hero eyebrow={greeting()} title={name} />
-
-      {/* Разделы уже есть в таббаре — здесь только главное действие */}
-      <Card className="card__section">
-        <Link to="/house" className="flat">
-          <div className="grow stack">
-            <div className="flat__title">{aptNo ? `Квартира ${aptNo}` : 'Моя квартира'}</div>
-            <div className="muted">{me.data.house.address}</div>
-          </div>
-          <IconChevron size={20} className="chev" />
-        </Link>
-        <ButtonLink to="/requests/new" size="lg" stretched>
+      {/* Сверху дом и главное действие; разделы уже есть в таббаре */}
+      <PageHeader
+        hero
+        eyebrow={[city, aptNo && `кв. ${aptNo}`].filter(Boolean).join(' · ')}
+        title={street}
+      >
+        <ButtonLink
+          to="/requests/new"
+          variant="secondary"
+          size="lg"
+          stretched
+          className="btn--light"
+        >
           <IconPlus size={20} />
           Сообщить о проблеме
         </ButtonLink>
-        {me.data.role === 'dispatcher' && (
-          <ButtonLink to="/dispatcher" variant="secondary" stretched>
-            Кабинет диспетчера
-          </ButtonLink>
-        )}
-      </Card>
+      </PageHeader>
 
-      <div className="duo">
-        <Link to="/requests" className="card card--pad status-card">
-          <span className="status-card__title">Заявки</span>
-          {requests.isPending ? (
-            <Chip>…</Chip>
-          ) : overdue > 0 ? (
-            <Chip tone="danger" solid>
-              {overdue} с просрочкой
-            </Chip>
-          ) : active.length > 0 ? (
-            <Chip tone="accent" solid>
-              {active.length} в работе
-            </Chip>
-          ) : (
-            <Chip>нет открытых</Chip>
+      {me.data.role === 'dispatcher' && (
+        <Card pad={false} className="list">
+          <RowLink
+            to="/dispatcher"
+            icon={<IconUsers size={20} />}
+            tone="warn"
+            title="Кабинет диспетчера"
+            sub="Входящие заявки по домам УК"
+          />
+        </Card>
+      )}
+
+      {/* Свои открытые заявки — выше справочного: срок и сумма и есть суть продукта */}
+      {requests.isPending ? (
+        <Loading compact />
+      ) : requests.isError ? (
+        <ErrorView
+          error={requests.error}
+          message={requests.error.message}
+          onRetry={() => void requests.refetch()}
+        />
+      ) : active.length > 0 ? (
+        <div className="stack-8">
+          <SectionHeader title="Мои заявки" action={`Все · ${active.length}`} to="/requests" />
+          {kopecks > 0 && first && (
+            <Card pad={false} className="list">
+              <RowLink
+                to={`/requests/${first.id}`}
+                icon={<span className="icon-sq__glyph">₽</span>}
+                tone="ok"
+                title="Перерасчёт"
+                sub={`по заявке № ${first.number}`}
+                value={<span className="row-link__money num">{formatRub(kopecks)}</span>}
+              />
+            </Card>
           )}
-          <span className="status-card__cap">
-            {overdue > 0
-              ? 'Срок ответа УК вышел'
-              : nearestDue
-                ? `Ближайший срок ${fmtDate(nearestDue)}`
-                : 'Сообщите, если что-то не так'}
-          </span>
-        </Link>
-        <Link
-          to={first ? `/requests/${first.id}` : '/requests'}
-          className="card card--pad status-card"
-        >
-          <span className="status-card__title">Перерасчёт</span>
-          {kopecks > 0 ? (
-            <Chip tone="ok" solid>
-              {formatRub(kopecks)}
-            </Chip>
-          ) : (
-            <Chip>пока нет</Chip>
-          )}
-          <span className="status-card__cap">
-            {kopecks > 0 && first
-              ? `Вам положено по заявке № ${first.number}`
-              : 'Начисляется, если нарушение дольше нормы'}
-          </span>
-        </Link>
-      </div>
+          {active.slice(0, 3).map((r) => (
+            <RequestRow key={r.id} r={r} />
+          ))}
+        </div>
+      ) : null}
 
       {home.data?.announcement && (
         <div className="notice">
@@ -199,25 +184,6 @@ export function Home() {
           )}
         </>
       )}
-
-      <div className="stack-8">
-        <SectionHeader
-          title="Мои заявки"
-          action={active.length ? `Все · ${active.length}` : 'Все'}
-          to="/requests"
-        />
-        {requests.isPending ? (
-          <Loading compact />
-        ) : active.length > 0 ? (
-          active.slice(0, 2).map((r) => <RequestRow key={r.id} r={r} />)
-        ) : (
-          <Card>
-            <div className="muted">
-              Открытых заявок нет. Если что-то сломалось, нажмите «Сообщить о проблеме».
-            </div>
-          </Card>
-        )}
-      </div>
 
       {home.data?.house.dataKind === 'model' && (
         <div className="hint">

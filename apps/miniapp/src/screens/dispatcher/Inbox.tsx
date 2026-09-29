@@ -99,7 +99,12 @@ function ClusterList({ inbox, selectedKey }: { inbox: Inbox; selectedKey?: strin
     <div className="stack">
       <div className="stats">
         <Stat small value={String(fresh)} label="новых" />
-        <Stat small value={String(overdue)} label="просрочено" />
+        <Stat
+          small
+          value={String(overdue)}
+          label="просрочено"
+          tone={overdue > 0 ? 'danger' : undefined}
+        />
         <Stat small value={formatRub(inbox.totalKopecks)} label="цена простоя по домам" />
         <Stat
           small

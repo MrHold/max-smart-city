@@ -3,7 +3,7 @@ import { IconBuilding, IconHome, IconList, IconUser } from './icons';
 import { cx } from './index';
 
 const tabs = [
-  { to: '/', label: 'Мой дом', icon: IconHome, end: true },
+  { to: '/', label: 'Главная', icon: IconHome, end: true },
   { to: '/requests', label: 'Заявки', icon: IconList },
   { to: '/house', label: 'Дом', icon: IconBuilding },
   { to: '/profile', label: 'Профиль', icon: IconUser },
