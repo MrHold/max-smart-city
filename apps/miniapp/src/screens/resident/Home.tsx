@@ -75,9 +75,9 @@ export function Home() {
       )}
 
       <div className="stack-8">
-        <SectionHeader title="Кому звонить сейчас" action="Все контакты" to="/contacts" />
+        <SectionHeader title="Кому звонить сейчас" action="График" to="/contacts" />
         {home.isPending ? (
-          <Loading compact />
+          <Loading />
         ) : home.isError ? (
           <ErrorView
             error={home.error}
@@ -92,13 +92,6 @@ export function Home() {
           </Card>
         )}
       </div>
-
-      {home.data?.announcement && (
-        <div className="banner banner--warn">
-          <div className="eyebrow">{home.data.announcement.title}</div>
-          <div>{home.data.announcement.text}</div>
-        </div>
-      )}
 
       <ButtonLink to="/requests/new" size="lg" stretched>
         <IconPlus />
@@ -132,6 +125,13 @@ export function Home() {
           </Card>
         )}
       </div>
+
+      {home.data?.announcement && (
+        <div className="banner banner--warn">
+          <div className="eyebrow">{home.data.announcement.title}</div>
+          <div>{home.data.announcement.text}</div>
+        </div>
+      )}
 
       {home.data?.house.dataKind === 'model' && (
         <div className="hint">
