@@ -1,0 +1,2133 @@
+# Сгенерировано из zod-контрактов (packages/domain) и списка маршрутов
+# (apps/api/src/openapi/spec.ts). Руками не править: pnpm --filter @msc/api openapi
+openapi: 3.1.0
+info:
+  title: Одна заявка на весь дом — API мини-приложения
+  version: 1.0.0
+  description: |-
+    HTTP API, которое обслуживает мини-приложение в MAX. Отдельным продуктом для внешних систем не является.
+
+    Вход — по подписи MAX: мини-приложение передаёт initData в заголовке X-Init-Data, сервер проверяет
+    HMAC-подпись токеном бота и свежесть данных. Для проверки без MAX подписанную initData тестового
+    пользователя печатает `pnpm --filter @msc/api sign-init-data` (нужен тот же BOT_TOKEN, что у сервера).
+
+    Ошибки всегда в одном формате: {"error": {"code": "...", "message": "..."}}.
+    Время — ISO 8601 в UTC, деньги — целые копейки.
+servers:
+  - url: https://belyaevmaxim.ru
+    description: Сервер на период проверки
+  - url: http://localhost:3001
+    description: Локальный запуск
+tags:
+  - name: Служебное
+    description: Проверка, что сервер работает
+  - name: Дома
+    description: Справочник домов, управляющих организаций и категорий заявок — без входа
+  - name: Пользователь
+    description: Профиль, привязка к дому, просмотр и удаление своих данных
+  - name: Заявки
+    description: Заявки жителя, «У меня тоже» и приёмка работы
+  - name: Документы
+    description: "PDF: заявление о перерасчёте и обращение в жилищную инспекцию"
+  - name: Фото
+    description: Загрузка и выдача фотографий к заявкам
+  - name: Демо-режим
+    description: Перемотка времени и роль диспетчера одним аккаунтом — только при DEMO_MODE=1
+  - name: Диспетчер
+    description: "Кабинет диспетчера УК: входящие по причинам, исполнители, массовые действия"
+paths:
+  /api/health:
+    get:
+      tags:
+        - Служебное
+      summary: Проверка живости сервера
+      operationId: getApiHealth
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "500":
+          $ref: "#/components/responses/E500"
+      security: []
+  /api/houses:
+    get:
+      tags:
+        - Дома
+      summary: Поиск дома по адресу
+      operationId: getApiHouses
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HouseSearchItem"
+        "400":
+          $ref: "#/components/responses/E400"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Без учёта регистра, от 3 символов.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Часть адреса, от 3 до 100 символов
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 100
+      security: []
+  /api/houses/{id}/home:
+    get:
+      tags:
+        - Дома
+      summary: "Экран «Мой дом»: УК, контакты с признаком «открыто сейчас», объявление"
+      operationId: getApiHousesIdHome
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Home"
+        "404":
+          $ref: "#/components/responses/E404"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор дома, например house-16-kazan-001
+          schema:
+            type: string
+      security: []
+  /api/houses/{id}/categories:
+    get:
+      tags:
+        - Дома
+      summary: Категории заявок для региона дома
+      operationId: getApiHousesIdCategories
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+        "404":
+          $ref: "#/components/responses/E404"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор дома
+          schema:
+            type: string
+      security: []
+  /api/me:
+    get:
+      tags:
+        - Пользователь
+      summary: "Кто вошёл: профиль MAX, роль, дом"
+      operationId: getApiMe
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/E401"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Первый вызов создаёт пользователя.
+      security:
+        - initData: []
+    delete:
+      tags:
+        - Пользователь
+      summary: Удалить свои данные
+      operationId: deleteApiMe
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteMeResult"
+        "401":
+          $ref: "#/components/responses/E401"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Удаляет привязки, согласия, присоединения и очередь уведомлений. Заявки не удаляются, а обезличиваются.
+      security:
+        - initData: []
+  /api/me/house:
+    post:
+      tags:
+        - Пользователь
+      summary: Привязка к дому и квартире
+      operationId: postApiMeHouse
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "404":
+          $ref: "#/components/responses/E404"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BindHouseInput"
+  /api/me/data:
+    get:
+      tags:
+        - Пользователь
+      summary: Какие данные о пользователе хранятся и зачем
+      operationId: getApiMeData
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyData"
+        "401":
+          $ref: "#/components/responses/E401"
+        "404":
+          $ref: "#/components/responses/E404"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+  /api/requests:
+    get:
+      tags:
+        - Заявки
+      summary: "Мои заявки: поданные и те, к которым я присоединился"
+      operationId: getApiRequests
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RequestSummary"
+        "401":
+          $ref: "#/components/responses/E401"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+    post:
+      tags:
+        - Заявки
+      summary: Подать заявку
+      operationId: postApiRequests
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestDetail"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "404":
+          $ref: "#/components/responses/E404"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Срок ответа считается по норме от момента подачи. Повтор той же категории в течение DUPLICATE_WINDOW_MIN возвращает уже созданную заявку.
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewRequestInput"
+  /api/requests/{id}:
+    get:
+      tags:
+        - Заявки
+      summary: Карточка заявки
+      operationId: getApiRequestsId
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestDetail"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Доступна автору и жителям того же дома.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор (UUID из ответов API)
+          schema:
+            type: string
+      security:
+        - initData: []
+  /api/requests/{id}/join:
+    post:
+      tags:
+        - Заявки
+      summary: "«У меня тоже»: сосед присоединяется к заявке"
+      operationId: postApiRequestsIdJoin
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestDetail"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "409":
+          $ref: "#/components/responses/E409"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор (UUID из ответов API)
+          schema:
+            type: string
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinInput"
+  /api/requests/{id}/confirm:
+    post:
+      tags:
+        - Заявки
+      summary: Житель принимает работу или возвращает её
+      operationId: postApiRequestsIdConfirm
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestDetail"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "409":
+          $ref: "#/components/responses/E409"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор (UUID из ответов API)
+          schema:
+            type: string
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmInput"
+  /api/requests/{id}/documents/{kind}/link:
+    post:
+      tags:
+        - Документы
+      summary: Временная подписанная ссылка на PDF
+      operationId: postApiRequestsIdDocumentsKindLink
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentLink"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "409":
+          $ref: "#/components/responses/E409"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Нужна, потому что мини-приложение открывает PDF обычным переходом без заголовка X-Init-Data.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор (UUID из ответов API)
+          schema:
+            type: string
+        - name: kind
+          in: path
+          required: true
+          description: claim — заявление о перерасчёте; gji — обращение в жилищную инспекцию
+          schema:
+            type: string
+            enum:
+              - claim
+              - gji
+      security:
+        - initData: []
+  /api/requests/{id}/documents/claim.pdf:
+    get:
+      tags:
+        - Документы
+      summary: Заявление о перерасчёте (PDF)
+      operationId: getApiRequestsIdDocumentsClaimPdf
+      responses:
+        "200":
+          description: PDF-документ
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "409":
+          $ref: "#/components/responses/E409"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Доступно автору заявки, когда насчитан перерасчёт.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор (UUID из ответов API)
+          schema:
+            type: string
+        - name: exp
+          in: query
+          required: false
+          description: Срок ссылки, мс (из /link)
+          schema:
+            type: string
+        - name: sig
+          in: query
+          required: false
+          description: Подпись ссылки (из /link)
+          schema:
+            type: string
+      security:
+        - initData: []
+        - {}
+  /api/requests/{id}/documents/gji.pdf:
+    get:
+      tags:
+        - Документы
+      summary: Обращение в жилищную инспекцию (PDF)
+      operationId: getApiRequestsIdDocumentsGjiPdf
+      responses:
+        "200":
+          description: PDF-документ
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "409":
+          $ref: "#/components/responses/E409"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Доступно автору после истечения срока ответа управляющей организации.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор (UUID из ответов API)
+          schema:
+            type: string
+        - name: exp
+          in: query
+          required: false
+          description: Срок ссылки, мс (из /link)
+          schema:
+            type: string
+        - name: sig
+          in: query
+          required: false
+          description: Подпись ссылки (из /link)
+          schema:
+            type: string
+      security:
+        - initData: []
+        - {}
+  /api/photos:
+    post:
+      tags:
+        - Фото
+      summary: Загрузить фото к будущей заявке
+      operationId: postApiPhotos
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoUpload"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "406":
+          $ref: "#/components/responses/E406"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: multipart/form-data, поле file; JPEG, PNG, WebP или HEIC до 5 МБ.
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+  /api/photos/{dir}/{file}:
+    get:
+      tags:
+        - Фото
+      summary: Отдать фото по ключу
+      operationId: getApiPhotosDirFile
+      responses:
+        "200":
+          description: Изображение
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/E404"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: "Ключ из ответа загрузки или карточки заявки: <2 символа>/<хеш>.<расширение>. Открыт без входа: ключ неугадываемый."
+      parameters:
+        - name: dir
+          in: path
+          required: true
+          description: Первые 2 символа хеша
+          schema:
+            type: string
+        - name: file
+          in: path
+          required: true
+          description: "Имя файла: хеш и расширение"
+          schema:
+            type: string
+      security: []
+  /api/demo/clock:
+    get:
+      tags:
+        - Демо-режим
+      summary: Текущий сдвиг демо-часов
+      operationId: getApiDemoClock
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoClockState"
+        "404":
+          $ref: "#/components/responses/E404"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Только при DEMO_MODE=1, иначе 404.
+      security: []
+    post:
+      tags:
+        - Демо-режим
+      summary: Перемотать или сбросить демо-часы
+      operationId: postApiDemoClock
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoClockState"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "404":
+          $ref: "#/components/responses/E404"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Только при DEMO_MODE=1, иначе 404.
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemoClockInput"
+  /api/demo/dispatcher:
+    post:
+      tags:
+        - Демо-режим
+      summary: Взять роль диспетчера УК своего дома
+      operationId: postApiDemoDispatcher
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoDispatcher"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "404":
+          $ref: "#/components/responses/E404"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Чтобы жюри прошло сценарий одним аккаунтом. Только при DEMO_MODE=1, иначе 404.
+      security:
+        - initData: []
+  /api/dispatcher/inbox:
+    get:
+      tags:
+        - Диспетчер
+      summary: Входящие, сгруппированные по причинам, со сроками и ценой простоя
+      operationId: getApiDispatcherInbox
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DispatcherInbox"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+  /api/dispatcher/executors:
+    get:
+      tags:
+        - Диспетчер
+      summary: Исполнители своей УК
+      operationId: getApiDispatcherExecutors
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Executor"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+  /api/dispatcher/executors/{id}/invite:
+    get:
+      tags:
+        - Диспетчер
+      summary: Ссылка-приглашение исполнителя в бот
+      operationId: getApiDispatcherExecutorsIdInvite
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutorInvite"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+        "503":
+          $ref: "#/components/responses/E503"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор исполнителя
+          schema:
+            type: string
+      security:
+        - initData: []
+  /api/dispatcher/accept:
+    post:
+      tags:
+        - Диспетчер
+      summary: Принять заявки
+      operationId: postApiDispatcherAccept
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkResult"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInput"
+  /api/dispatcher/reject:
+    post:
+      tags:
+        - Диспетчер
+      summary: Отклонить заявки с причиной
+      operationId: postApiDispatcherReject
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkResult"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectInput"
+  /api/dispatcher/assign:
+    post:
+      tags:
+        - Диспетчер
+      summary: Назначить исполнителя и плановое время
+      operationId: postApiDispatcherAssign
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkResult"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "409":
+          $ref: "#/components/responses/E409"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      description: Исполнителю в боте уходит наряд. 409 — исполнитель не выполняет работы этой категории.
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignInput"
+  /api/dispatcher/start:
+    post:
+      tags:
+        - Диспетчер
+      summary: Отметить, что исполнитель приступил
+      operationId: postApiDispatcherStart
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkResult"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInput"
+  /api/dispatcher/complete:
+    post:
+      tags:
+        - Диспетчер
+      summary: Отметить выполненными
+      operationId: postApiDispatcherComplete
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkResult"
+        "400":
+          $ref: "#/components/responses/E400"
+        "401":
+          $ref: "#/components/responses/E401"
+        "403":
+          $ref: "#/components/responses/E403"
+        "404":
+          $ref: "#/components/responses/E404"
+        "413":
+          $ref: "#/components/responses/E413"
+        "415":
+          $ref: "#/components/responses/E415"
+        "429":
+          $ref: "#/components/responses/E429"
+        "500":
+          $ref: "#/components/responses/E500"
+      security:
+        - initData: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteInput"
+components:
+  securitySchemes:
+    initData:
+      type: apiKey
+      in: header
+      name: X-Init-Data
+      description: Данные запуска мини-приложения MAX (initData) с HMAC-подписью.
+  responses:
+    E400:
+      description: Неверные входные данные
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E401:
+      description: Нет или недействителен вход через MAX (заголовок X-Init-Data)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E403:
+      description: "Нет доступа: чужой дом, не автор заявки или не диспетчер"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E404:
+      description: Не найдено
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E406:
+      description: Тело запроса не multipart/form-data
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E409:
+      description: Действие недопустимо в текущем состоянии заявки
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E413:
+      description: Тело запроса больше 1 МБ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E415:
+      description: Тело запроса не application/json
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E429:
+      description: "Слишком много запросов: больше RATE_LIMIT_MAX в минуту"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E503:
+      description: Функция не настроена на сервере
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    E500:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+  schemas:
+    Provenance:
+      type: string
+      enum:
+        - fact
+        - calc
+        - model
+    Role:
+      type: string
+      enum:
+        - resident
+        - dispatcher
+        - executor
+    Service:
+      type: string
+      enum:
+        - heating
+        - hot_water
+        - cold_water
+    RequestKind:
+      type: string
+      enum:
+        - emergency
+        - repair
+        - utility_quality
+        - utility_interruption
+    RequestStatus:
+      type: string
+      enum:
+        - new
+        - accepted
+        - rejected
+        - assigned
+        - in_progress
+        - done
+        - confirmed
+        - reopened
+    LocationScope:
+      type: string
+      enum:
+        - yard
+        - entrance
+        - floor
+        - apartment
+    MeasurementPlace:
+      type: string
+      enum:
+        - room
+        - corner_room
+        - tap
+    ContactKind:
+      type: string
+      enum:
+        - office
+        - dispatcher
+        - emergency
+    NormRef:
+      type: object
+      properties:
+        act:
+          type: string
+          minLength: 1
+        point:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+      required:
+        - act
+        - point
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+          required:
+            - code
+            - message
+      required:
+        - error
+    Health:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        now:
+          type: string
+          format: date-time
+      required:
+        - ok
+        - now
+    HouseSearchItem:
+      type: object
+      properties:
+        id:
+          type: string
+        address:
+          type: string
+        regionCode:
+          type: string
+        dataKind:
+          $ref: "#/components/schemas/Provenance"
+      required:
+        - id
+        - address
+        - regionCode
+        - dataKind
+    Schedule:
+      type: object
+      properties:
+        days:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+        from:
+          type: string
+          pattern: ^\d{2}:\d{2}$
+        to:
+          type: string
+          pattern: ^\d{2}:\d{2}$
+      required:
+        - days
+        - from
+        - to
+    Contact:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/ContactKind"
+        phone:
+          type: string
+        schedule:
+          anyOf:
+            - $ref: "#/components/schemas/Schedule"
+            - type: "null"
+        open:
+          anyOf:
+            - type: object
+              properties:
+                isOpen:
+                  type: boolean
+                until:
+                  type:
+                    - string
+                    - "null"
+              required:
+                - isOpen
+                - until
+            - type: "null"
+      required:
+        - kind
+        - phone
+        - schedule
+        - open
+    Home:
+      type: object
+      properties:
+        house:
+          type: object
+          properties:
+            id:
+              type: string
+            address:
+              type: string
+            tz:
+              type: string
+            dataKind:
+              $ref: "#/components/schemas/Provenance"
+          required:
+            - id
+            - address
+            - tz
+            - dataKind
+        org:
+          anyOf:
+            - type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                address:
+                  type:
+                    - string
+                    - "null"
+                dataKind:
+                  $ref: "#/components/schemas/Provenance"
+              required:
+                - id
+                - name
+                - address
+                - dataKind
+            - type: "null"
+        contacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contact"
+        announcement:
+          anyOf:
+            - type: object
+              properties:
+                title:
+                  type: string
+                text:
+                  type: string
+              required:
+                - title
+                - text
+            - type: "null"
+        now:
+          type: string
+          format: date-time
+      required:
+        - house
+        - org
+        - contacts
+        - announcement
+        - now
+    Category:
+      type: object
+      properties:
+        code:
+          type: string
+        title:
+          type: string
+        kind:
+          $ref: "#/components/schemas/RequestKind"
+        service:
+          $ref: "#/components/schemas/Service"
+        zone:
+          type: string
+          enum:
+            - yard
+            - entrance
+            - apartment
+        slaHours:
+          type: number
+          exclusiveMinimum: 0
+      required:
+        - code
+        - title
+        - kind
+        - slaHours
+    Me:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type:
+                - string
+                - "null"
+            username:
+              type:
+                - string
+                - "null"
+            photoUrl:
+              type:
+                - string
+                - "null"
+          required:
+            - id
+            - firstName
+            - lastName
+            - username
+            - photoUrl
+        role:
+          anyOf:
+            - $ref: "#/components/schemas/Role"
+            - type: "null"
+        house:
+          anyOf:
+            - type: object
+              properties:
+                id:
+                  type: string
+                address:
+                  type: string
+              required:
+                - id
+                - address
+            - type: "null"
+        apartmentLabel:
+          type:
+            - string
+            - "null"
+        consentGiven:
+          type: boolean
+        memberships:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                $ref: "#/components/schemas/Role"
+              houseId:
+                type:
+                  - string
+                  - "null"
+              orgId:
+                type:
+                  - string
+                  - "null"
+              apartmentLabel:
+                type:
+                  - string
+                  - "null"
+              confirmed:
+                type: boolean
+            required:
+              - role
+              - houseId
+              - orgId
+              - apartmentLabel
+              - confirmed
+        startParam:
+          type:
+            - string
+            - "null"
+      required:
+        - user
+        - role
+        - house
+        - apartmentLabel
+        - consentGiven
+        - memberships
+        - startParam
+    BindHouseInput:
+      type: object
+      properties:
+        houseId:
+          type: string
+        apartmentLabel:
+          type: string
+          pattern: ^кв\. ?\d{1,4}[а-яё]?$
+      required:
+        - houseId
+        - apartmentLabel
+    StoredItem:
+      type: object
+      properties:
+        label:
+          type: string
+        count:
+          type: integer
+          minimum: 0
+        purpose:
+          type: string
+        values:
+          type: array
+          items:
+            type: string
+      required:
+        - label
+        - count
+        - purpose
+    MyData:
+      type: object
+      properties:
+        userId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoredItem"
+        deletionNotice:
+          type: string
+      required:
+        - userId
+        - createdAt
+        - items
+        - deletionNotice
+    DeleteMeResult:
+      type: object
+      properties:
+        deleted:
+          type: object
+          properties:
+            memberships:
+              type: integer
+              minimum: 0
+            consents:
+              type: integer
+              minimum: 0
+            joins:
+              type: integer
+              minimum: 0
+            notifications:
+              type: integer
+              minimum: 0
+          required:
+            - memberships
+            - consents
+            - joins
+            - notifications
+        anonymizedRequests:
+          type: integer
+          minimum: 0
+      required:
+        - deleted
+        - anonymizedRequests
+    Measurement:
+      type: object
+      properties:
+        value:
+          type: number
+        unit:
+          type: string
+          const: celsius
+        measuredAt:
+          type: string
+          format: date-time
+        place:
+          $ref: "#/components/schemas/MeasurementPlace"
+      required:
+        - value
+        - unit
+        - measuredAt
+        - place
+    Location:
+      type: object
+      properties:
+        scope:
+          $ref: "#/components/schemas/LocationScope"
+        entrance:
+          type: integer
+          exclusiveMinimum: 0
+        floor:
+          type: integer
+        note:
+          type: string
+          maxLength: 200
+      required:
+        - scope
+    LiabilityStep:
+      type: object
+      properties:
+        label:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        provenance:
+          $ref: "#/components/schemas/Provenance"
+        ref:
+          $ref: "#/components/schemas/NormRef"
+      required:
+        - label
+        - value
+        - unit
+        - provenance
+    Liability:
+      type: object
+      properties:
+        requestId:
+          type: string
+        apartmentKopecks:
+          type: integer
+          minimum: 0
+        houseKopecks:
+          type: integer
+          minimum: 0
+        perHourHouseKopecks:
+          type: integer
+          minimum: 0
+        hours:
+          type: number
+          minimum: 0
+        thresholdReachedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiabilityStep"
+        computedAt:
+          type: string
+          format: date-time
+        rulesVersion:
+          type: string
+      required:
+        - requestId
+        - apartmentKopecks
+        - houseKopecks
+        - perHourHouseKopecks
+        - hours
+        - thresholdReachedAt
+        - steps
+        - computedAt
+        - rulesVersion
+    RequestEvent:
+      type: object
+      properties:
+        type:
+          type: string
+        label:
+          type: string
+        at:
+          type: string
+          format: date-time
+      required:
+        - type
+        - label
+        - at
+    JoinerPublic:
+      type: object
+      properties:
+        apartmentLabel:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+      required:
+        - apartmentLabel
+        - joinedAt
+    NewRequestInput:
+      type: object
+      properties:
+        category:
+          type: string
+          minLength: 1
+        location:
+          $ref: "#/components/schemas/Location"
+        description:
+          type: string
+          maxLength: 1000
+        startedAt:
+          type: string
+          format: date-time
+        measurements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Measurement"
+        plannedNotice:
+          type:
+            - boolean
+            - "null"
+        photoKeys:
+          maxItems: 5
+          type: array
+          items:
+            type: string
+      required:
+        - category
+        - location
+        - description
+        - startedAt
+        - measurements
+        - plannedNotice
+        - photoKeys
+    RequestSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+        title:
+          type: string
+        kind:
+          $ref: "#/components/schemas/RequestKind"
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        createdAt:
+          type: string
+          format: date-time
+        dueAt:
+          type: string
+          format: date-time
+        overdue:
+          type: boolean
+        locationText:
+          type: string
+        joinersCount:
+          type: integer
+          minimum: 0
+      required:
+        - id
+        - number
+        - title
+        - kind
+        - status
+        - createdAt
+        - dueAt
+        - overdue
+        - locationText
+        - joinersCount
+    RequestDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+        title:
+          type: string
+        kind:
+          $ref: "#/components/schemas/RequestKind"
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        createdAt:
+          type: string
+          format: date-time
+        dueAt:
+          type: string
+          format: date-time
+        overdue:
+          type: boolean
+        locationText:
+          type: string
+        joinersCount:
+          type: integer
+          minimum: 0
+        service:
+          anyOf:
+            - $ref: "#/components/schemas/Service"
+            - type: "null"
+        description:
+          type: string
+        location:
+          $ref: "#/components/schemas/Location"
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        plannedNotice:
+          type:
+            - boolean
+            - "null"
+        measurements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Measurement"
+        photos:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              url:
+                type: string
+              stage:
+                type: string
+                enum:
+                  - before
+                  - after
+            required:
+              - key
+              - url
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestEvent"
+        joiners:
+          type: array
+          items:
+            $ref: "#/components/schemas/JoinerPublic"
+        liability:
+          anyOf:
+            - $ref: "#/components/schemas/Liability"
+            - type: "null"
+        executor:
+          anyOf:
+            - type: object
+              properties:
+                nameShort:
+                  type: string
+                slot:
+                  type:
+                    - string
+                    - "null"
+                phone:
+                  type:
+                    - string
+                    - "null"
+              required:
+                - nameShort
+                - slot
+                - phone
+            - type: "null"
+        isAuthor:
+          type: boolean
+        canJoin:
+          type: boolean
+        shareUrl:
+          type: string
+        claim:
+          type: object
+          properties:
+            available:
+              type: boolean
+            url:
+              type:
+                - string
+                - "null"
+          required:
+            - available
+            - url
+        gji:
+          type: object
+          properties:
+            available:
+              type: boolean
+            afterAt:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: "null"
+          required:
+            - available
+            - afterAt
+      required:
+        - id
+        - number
+        - title
+        - kind
+        - status
+        - createdAt
+        - dueAt
+        - overdue
+        - locationText
+        - joinersCount
+        - service
+        - description
+        - location
+        - startedAt
+        - endedAt
+        - plannedNotice
+        - measurements
+        - photos
+        - events
+        - joiners
+        - liability
+        - executor
+        - isAuthor
+        - canJoin
+        - shareUrl
+        - claim
+        - gji
+    JoinInput:
+      type: object
+      properties:
+        apartmentLabel:
+          type: string
+          pattern: ^кв\. ?\d{1,4}[а-яё]?$
+        measurements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Measurement"
+      required:
+        - apartmentLabel
+        - measurements
+    ConfirmInput:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+        note:
+          type: string
+          maxLength: 1000
+      required:
+        - accepted
+    DocumentLink:
+      type: object
+      properties:
+        url:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - url
+        - expiresAt
+    PhotoUpload:
+      type: object
+      properties:
+        key:
+          type: string
+        url:
+          type: string
+      required:
+        - key
+        - url
+    DemoClockState:
+      type: object
+      properties:
+        now:
+          type: string
+          format: date-time
+        offsetMs:
+          type: integer
+        label:
+          type: string
+      required:
+        - now
+        - offsetMs
+        - label
+    DemoClockInput:
+      anyOf:
+        - type: object
+          properties:
+            shiftHours:
+              type: number
+              minimum: -720
+              maximum: 720
+          required:
+            - shiftHours
+        - type: object
+          properties:
+            offsetMs:
+              type: integer
+              minimum: -2592000000
+              maximum: 2592000000
+          required:
+            - offsetMs
+        - type: object
+          properties:
+            reset:
+              type: boolean
+              const: true
+          required:
+            - reset
+    DemoDispatcher:
+      type: object
+      properties:
+        role:
+          type: string
+          const: dispatcher
+        orgId:
+          type: string
+        orgName:
+          type: string
+      required:
+        - role
+        - orgId
+        - orgName
+    ClusterCard:
+      type: object
+      properties:
+        key:
+          type: string
+        houseId:
+          type: string
+        houseAddress:
+          type: string
+        category:
+          type: string
+        title:
+          type: string
+        kind:
+          $ref: "#/components/schemas/RequestKind"
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        requestIds:
+          minItems: 1
+          type: array
+          items:
+            type: string
+        apartments:
+          type: integer
+          exclusiveMinimum: 0
+        startedAt:
+          type: string
+          format: date-time
+        dueAt:
+          type: string
+          format: date-time
+        overdue:
+          type: boolean
+        kopecks:
+          type: integer
+          minimum: 0
+        perHourKopecks:
+          type: integer
+          minimum: 0
+        executor:
+          anyOf:
+            - type: object
+              properties:
+                id:
+                  type: string
+                nameShort:
+                  type: string
+                plannedAt:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                    - type: "null"
+              required:
+                - id
+                - nameShort
+                - plannedAt
+            - type: "null"
+      required:
+        - key
+        - houseId
+        - houseAddress
+        - category
+        - title
+        - kind
+        - status
+        - requestIds
+        - apartments
+        - startedAt
+        - dueAt
+        - overdue
+        - kopecks
+        - perHourKopecks
+        - executor
+    DispatcherInbox:
+      type: object
+      properties:
+        orgName:
+          type: string
+        now:
+          type: string
+          format: date-time
+        clusters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClusterCard"
+        totalKopecks:
+          type: integer
+          minimum: 0
+        totalPerHourKopecks:
+          type: integer
+          minimum: 0
+      required:
+        - orgName
+        - now
+        - clusters
+        - totalKopecks
+        - totalPerHourKopecks
+    Executor:
+      type: object
+      properties:
+        id:
+          type: string
+        nameShort:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+        inBot:
+          type: boolean
+      required:
+        - id
+        - nameShort
+        - categories
+        - inBot
+    ExecutorInvite:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+      required:
+        - url
+    AcceptInput:
+      type: object
+      properties:
+        requestIds:
+          minItems: 1
+          maxItems: 200
+          type: array
+          items:
+            type: string
+      required:
+        - requestIds
+    RejectInput:
+      type: object
+      properties:
+        requestIds:
+          minItems: 1
+          maxItems: 200
+          type: array
+          items:
+            type: string
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+        - requestIds
+        - reason
+    AssignInput:
+      type: object
+      properties:
+        requestIds:
+          minItems: 1
+          maxItems: 200
+          type: array
+          items:
+            type: string
+        executorId:
+          type: string
+        plannedAt:
+          type: string
+          format: date-time
+      required:
+        - requestIds
+        - executorId
+    CompleteInput:
+      type: object
+      properties:
+        requestIds:
+          minItems: 1
+          maxItems: 200
+          type: array
+          items:
+            type: string
+        photoKeys:
+          default: []
+          maxItems: 5
+          type: array
+          items:
+            type: string
+      required:
+        - requestIds
+    BulkResult:
+      type: object
+      properties:
+        updated:
+          type: integer
+          minimum: 0
+        skipped:
+          type: array
+          items:
+            type: object
+            properties:
+              requestId:
+                type: string
+              reason:
+                type: string
+            required:
+              - requestId
+              - reason
+      required:
+        - updated
+        - skipped
