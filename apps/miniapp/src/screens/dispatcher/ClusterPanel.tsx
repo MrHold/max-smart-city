@@ -87,16 +87,30 @@ function AssignForm({ c, act }: { c: ClusterCard; act: Act }) {
       {list.length === 0 && <div className="muted">У организации пока нет исполнителей</div>}
       {list.map((e) => {
         const on = e.id === executorId;
+        const fit = fits(e.categories);
         return (
-          <label key={e.id} className={cx('exec-option', on && 'exec-option--on')}>
-            <input type="radio" name="executor" checked={on} onChange={() => setExecutorId(e.id)} />
+          <label
+            key={e.id}
+            className={cx('exec-option', on && 'exec-option--on', !fit && 'exec-option--off')}
+          >
+            <input
+              type="radio"
+              name="executor"
+              checked={on}
+              disabled={!fit}
+              onChange={() => setExecutorId(e.id)}
+            />
             <span className="grow stack" style={{ gap: 4 }}>
               <span className="row row--between">
                 <strong>{e.nameShort}</strong>
-                {fits(e.categories) && (
+                {fit ? (
                   <Chip xs tone="accent">
                     по профилю
                   </Chip>
+                ) : (
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    не по профилю
+                  </span>
                 )}
               </span>
               {e.inBot ? (

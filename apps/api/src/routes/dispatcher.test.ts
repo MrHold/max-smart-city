@@ -231,6 +231,28 @@ suite('кабинет диспетчера', () => {
     expect(after.clusters[0]?.executor?.nameShort).toBe(executors[0].nameShort);
   });
 
+  it('исполнителя не по профилю назначить нельзя', async () => {
+    const created = await createAccepted(RESIDENT);
+    const executors: Array<{ id: string; categories: string[] }> = (
+      await call('GET', '/api/dispatcher/executors', DISPATCHER)
+    ).json();
+    const electrician = executors.find((e) => !e.categories.includes('heating'));
+    expect(electrician).toBeDefined();
+
+    const res = await call('POST', '/api/dispatcher/assign', DISPATCHER, {
+      requestIds: [created.id],
+      executorId: electrician?.id,
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.message).toContain('Холодные батареи');
+
+    const card = (await inbox()).clusters[0];
+    expect(card?.status).toBe('accepted');
+    expect(card?.executor).toBeNull();
+    const rows = await db.execute(sql`select payload from outbox`);
+    expect(rows.rows.map((r) => (r.payload as { type: string }).type)).not.toContain('order');
+  });
+
   it('житель видит в карточке, кто придёт и когда', async () => {
     const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();

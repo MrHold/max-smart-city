@@ -970,6 +970,10 @@ a.card:active {
 .exec-option input {
   accent-color: var(--accent);
 }
+.exec-option--off {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 
 /* Плашка демо-часов закреплена сверху: сдвигаем содержимое, чтобы она не закрывала заголовок */
 html.demo .page {
