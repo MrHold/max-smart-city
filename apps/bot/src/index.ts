@@ -55,7 +55,9 @@ const me = await bot.api
   .getMyInfo()
   .catch((err: unknown) =>
     stop(
-      `Токен из BOT_TOKEN не подошёл — MAX не отдал данные бота (${err instanceof Error ? err.message : String(err)})`,
+      `MAX не отдал данные бота: неверный BOT_TOKEN или нет связи с MAX ` +
+        `(${err instanceof Error ? err.message : String(err)}). «fetch failed» при запуске без Docker ` +
+        '— обычно нет сертификатов Минцифры: NODE_EXTRA_CA_CERTS, см. docs/operations.md',
     ),
   );
 // проверенное имя: string, без null — им пользуются обработчики ниже
