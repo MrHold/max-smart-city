@@ -95,6 +95,15 @@ suite('кабинет диспетчера', () => {
     return RequestDetailSchema.parse(res.json());
   };
 
+  const createAccepted = async (initData: string, category = 'heating') => {
+    const created = await createRequest(initData, category);
+    const res = await call('POST', '/api/dispatcher/accept', DISPATCHER, {
+      requestIds: [created.id],
+    });
+    expect(res.json().updated, res.body).toBe(1);
+    return created;
+  };
+
   const inbox = async () => {
     const res = await call('GET', '/api/dispatcher/inbox', DISPATCHER);
     expect(res.statusCode, res.body).toBe(200);
@@ -156,6 +165,11 @@ suite('кабинет диспетчера', () => {
     expect(data.totalKopecks).toBe(card?.kopecks);
   });
 
+  it('новая заявка приходит во входящие непринятой, в том числе в демо-режиме', async () => {
+    await createRequest(RESIDENT);
+    expect((await inbox()).clusters[0]?.status).toBe('new');
+  });
+
   it('заявки жителей разных домов не смешиваются', async () => {
     await createRequest(RESIDENT);
     await bind(NEIGHBOUR, OTHER_HOUSE, 'кв. 3');
@@ -197,8 +211,8 @@ suite('кабинет диспетчера', () => {
   });
 
   it('назначение исполнителя меняет все заявки кластера сразу', async () => {
-    await createRequest(RESIDENT);
-    await createRequest(NEIGHBOUR);
+    await createAccepted(RESIDENT);
+    await createAccepted(NEIGHBOUR);
     const before = await inbox();
     const card = before.clusters[0];
     expect(card?.requestIds).toHaveLength(2);
@@ -218,7 +232,7 @@ suite('кабинет диспетчера', () => {
   });
 
   it('житель видит в карточке, кто придёт и когда', async () => {
-    const created = await createRequest(RESIDENT);
+    const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
     await call('POST', '/api/dispatcher/assign', DISPATCHER, {
       requestIds: [created.id],
@@ -241,7 +255,7 @@ suite('кабинет диспетчера', () => {
   });
 
   it('жителю уходит уведомление о назначении', async () => {
-    const created = await createRequest(RESIDENT);
+    const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
     await call('POST', '/api/dispatcher/assign', DISPATCHER, {
       requestIds: [created.id],
@@ -254,7 +268,7 @@ suite('кабинет диспетчера', () => {
   });
 
   it('привязанному исполнителю уходит наряд с адресом', async () => {
-    const created = await createRequest(RESIDENT);
+    const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
 
     // Исполнителя связывает с аккаунтом MAX приглашение; здесь привязку делаем напрямую.
@@ -278,7 +292,7 @@ suite('кабинет диспетчера', () => {
   });
 
   it('без привязки исполнителя к аккаунту наряд не отправляется, но заявка назначена', async () => {
-    const created = await createRequest(RESIDENT);
+    const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
 
     const res = await call('POST', '/api/dispatcher/assign', DISPATCHER, {
@@ -313,8 +327,8 @@ suite('кабинет диспетчера', () => {
   });
 
   it('недопустимый переход не валит остальные заявки', async () => {
-    const ok = await createRequest(RESIDENT);
-    const other = await createRequest(NEIGHBOUR);
+    const ok = await createAccepted(RESIDENT);
+    const other = await createAccepted(NEIGHBOUR);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
 
     // Одну заявку доводим до выполненной — назначить исполнителя на неё уже нельзя.
@@ -333,7 +347,7 @@ suite('кабинет диспетчера', () => {
   });
 
   it('выполненная работа уходит из кабинета после подтверждения жителем', async () => {
-    const created = await createRequest(RESIDENT);
+    const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
 
     await call('POST', '/api/dispatcher/assign', DISPATCHER, {
@@ -353,7 +367,7 @@ suite('кабинет диспетчера', () => {
   });
 
   it('отказ жителя возвращает кластер в кабинет', async () => {
-    const created = await createRequest(RESIDENT);
+    const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
     await call('POST', '/api/dispatcher/assign', DISPATCHER, {
       requestIds: [created.id],
@@ -369,7 +383,7 @@ suite('кабинет диспетчера', () => {
   });
 
   it('нельзя прикрепить фото, загруженное другим человеком и ещё не привязанное к заявке', async () => {
-    const created = await createRequest(RESIDENT);
+    const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
     await call('POST', '/api/dispatcher/assign', DISPATCHER, {
       requestIds: [created.id],
@@ -396,7 +410,7 @@ suite('кабинет диспетчера', () => {
   });
 
   it('своё фото диспетчер прикрепляет как обычно', async () => {
-    const created = await createRequest(RESIDENT);
+    const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
     await call('POST', '/api/dispatcher/assign', DISPATCHER, {
       requestIds: [created.id],

@@ -336,8 +336,6 @@ export const requestsRoutes =
     secret: string,
   ): FastifyPluginAsync =>
   async (app) => {
-    const demoMode = process.env.DEMO_MODE === '1';
-
     async function loadRequest(id: string): Promise<RequestRow> {
       const [row] = await db.select().from(requests).where(eq(requests.id, id)).limit(1);
       if (!row) throw notFound('Заявка');
@@ -479,7 +477,7 @@ export const requestsRoutes =
             description: input.description,
             startedAt,
             plannedNotice: input.plannedNotice,
-            status: demoMode ? 'accepted' : 'new',
+            status: 'new',
             dueAt: due,
             // Время берём из часов приложения, а не из базы: в демо-режиме они сдвинуты,
             // и иначе заявка оказалась бы «созданной» в прошлом относительно своих сроков.
@@ -515,13 +513,6 @@ export const requestsRoutes =
           payload: { number },
           at: now,
         });
-        // В демо-режиме диспетчера нет, поэтому заявка принимается сама:
-        // иначе основной сценарий не пройти без второго аккаунта.
-        if (demoMode) {
-          await tx
-            .insert(requestEvents)
-            .values({ requestId: created.id, type: 'accepted', at: now });
-        }
 
         return created.id;
       });
