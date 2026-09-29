@@ -20,7 +20,8 @@ function ResultNote({ r }: { r: BulkResult }) {
   return (
     <div className={cx('banner', r.skipped.length ? 'banner--warn' : 'banner--accent')}>
       <div>
-        Обновлено {r.updated} {plural(r.updated, 'заявка', 'заявки', 'заявок')}
+        {plural(r.updated, 'Обновлена', 'Обновлены', 'Обновлено')} {r.updated}{' '}
+        {plural(r.updated, 'заявка', 'заявки', 'заявок')}
         {r.skipped.length > 0 && `, пропущено ${r.skipped.length}`}
       </div>
       {r.skipped.map((s) => (

@@ -235,6 +235,12 @@ html.demo .page {
   font-size: 14px;
   color: var(--ink-2);
 }
+.head__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .head__actions {
   display: flex;
   gap: 8px;

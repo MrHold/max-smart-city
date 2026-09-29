@@ -146,7 +146,11 @@ function ShareBlock({ r }: { r: RequestDetail }) {
           <IconShare size={18} />
           Поделиться в чат дома
         </Button>
-        <Button variant="secondary" onClick={() => void copy()} aria-label="Скопировать ссылку">
+        <Button
+          variant="secondary"
+          onClick={() => void copy()}
+          aria-label={copied ? 'Скопировано' : 'Скопировать ссылку'}
+        >
           {copied ? 'Скопировано' : <IconCopy size={18} />}
         </Button>
       </div>

@@ -203,19 +203,23 @@ export function PageHeader({
       <IconArrowLeft size={20} />
     </button>
   ) : null;
+  const h1 = <h1 className={cx('h1', large && 'h1--lg')}>{title}</h1>;
   return (
     <header className={cx('head', hero && 'head--hero', center && 'head--center')}>
-      {(back || actions) && (
-        <div className="head__bar">
-          {back ?? <span />}
-          {actions && <div className="head__actions">{actions}</div>}
-        </div>
-      )}
+      {back && <div className="head__bar">{back}</div>}
       <div className="head__main">
         {leading}
         <div className="head__titles">
           {eyebrow && <div className="head__eyebrow">{eyebrow}</div>}
-          <h1 className={cx('h1', large && 'h1--lg')}>{title}</h1>
+          {/* Действие на одной строке с заголовком, а не над ним */}
+          {actions ? (
+            <div className="head__title-row">
+              {h1}
+              <div className="head__actions">{actions}</div>
+            </div>
+          ) : (
+            h1
+          )}
           {subtitle && <div className="head__sub">{subtitle}</div>}
         </div>
       </div>
