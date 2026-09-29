@@ -5,21 +5,62 @@ import { type Deps, executorNameFor, registerExecutor } from './executor';
 import { startOutbox } from './outbox';
 import { botCommands, contactsText, executorNote, fallbackText, welcomeText } from './texts';
 
-const token = process.env.BOT_TOKEN;
-if (!token) {
-  console.error('BOT_TOKEN не задан: проверь .env в корне проекта');
-  process.exit(1);
+const mode = process.env.BOT_MODE ?? 'polling';
+
+/**
+ * Остановиться по понятной причине.
+ * На сервере (webhook) — завершить процесс: Docker перезапустит бота, и временный сбой пройдёт сам.
+ * Локально (polling) — не падать, а ждать: иначе контейнер с restart: unless-stopped
+ * перезапускал бы бота по кругу, засыпая лог одной и той же ошибкой.
+ */
+function stop(reason: string): Promise<never> {
+  console.error(reason);
+  if (mode === 'webhook') process.exit(1);
+  console.error(
+    'Бот не запущен и ждёт. Исправьте .env и перезапустите: docker compose restart bot',
+  );
+  setInterval(() => {}, 1 << 30); // держим процесс живым, ничего не делая
+  return new Promise<never>(() => {});
 }
+
+/**
+ * Адреса webhook, на которые подписан токен: если список не пуст, бот этого токена уже
+ * работает на сервере. null — узнать не удалось. MAX перенёс API на platform-api2.max.ru,
+ * поэтому пробуем новый адрес, затем старый. Токен — только в заголовке, в лог не пишем.
+ */
+async function webhookUrls(botToken: string): Promise<string[] | null> {
+  for (const host of ['https://platform-api2.max.ru', 'https://platform-api.max.ru']) {
+    try {
+      const res = await fetch(`${host}/subscriptions`, {
+        headers: { Authorization: botToken },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) continue;
+      const body = (await res.json()) as { subscriptions?: Array<{ url?: string }> };
+      return (body.subscriptions ?? []).map((s) => s.url ?? '').filter((url) => url !== '');
+    } catch {
+      // следующий адрес
+    }
+  }
+  return null;
+}
+
+const token = process.env.BOT_TOKEN ?? '';
+if (!token) await stop('BOT_TOKEN не задан: проверь .env в корне проекта');
 
 const bot = new Bot(token);
 
 // Имя и id бота нужны кнопке мини-приложения: MAX открывает приложение того бота, чьё имя указано
-const me = await bot.api.getMyInfo();
-if (!me.username) {
-  console.error('У бота нет публичного имени — кнопку мини-приложения не построить');
-  process.exit(1);
-}
-const botUsername = me.username; // проверенное имя: string, без null — им пользуются обработчики ниже
+const me = await bot.api
+  .getMyInfo()
+  .catch((err: unknown) =>
+    stop(
+      `Токен из BOT_TOKEN не подошёл — MAX не отдал данные бота (${err instanceof Error ? err.message : String(err)})`,
+    ),
+  );
+// проверенное имя: string, без null — им пользуются обработчики ниже
+const botUsername =
+  me.username ?? (await stop('У бота нет публичного имени — кнопку мини-приложения не построить'));
 
 const menu = Keyboard.inlineKeyboard([
   [Keyboard.button.openApp('Мой дом', botUsername, me.user_id)],
@@ -115,12 +156,35 @@ bot.catch((err) => {
   console.error('Ошибка в обработчике:', err);
 });
 
+if (mode === 'webhook') {
+  // На сервере: MAX сам присылает апдейты на https://<домен>/webhook, Caddy передаёт их сюда
+  const domain = process.env.PUBLIC_DOMAIN;
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!domain || !secret) await stop('Для BOT_MODE=webhook нужны PUBLIC_DOMAIN и WEBHOOK_SECRET');
+} else if (process.env.FORCE_POLLING !== '1') {
+  // Локально: polling при старте снимает webhook. Если токен уже подписан на webhook, значит, бот
+  // с этим токеном работает на сервере — локальный запуск молча сломал бы его, поэтому не стартуем.
+  const hooks = await webhookUrls(token);
+  if (hooks === null) {
+    console.warn(
+      'Не удалось узнать, работает ли этот токен на сервере — запускаюсь в режиме polling',
+    );
+  } else if (hooks.length > 0) {
+    await stop(
+      `Этот токен уже работает на сервере (webhook: ${hooks.join(', ')}). Локальный бот в режиме polling ` +
+        'снял бы webhook, и бот на сервере перестал бы отвечать. Для локальной проверки используйте ' +
+        'свой тестовый токен или FORCE_POLLING=1 — только если бот на сервере остановлен.',
+    );
+  }
+}
+
 // Подсказка команд при вводе «/» в чате. Не получилось — не страшно, бот работает и без неё.
 await bot.api.setMyCommands(botCommands).catch((err) => {
   console.warn('Не удалось задать список команд:', err instanceof Error ? err.message : err);
 });
 
-// Почтальон: рассылает уведомления и наряды, которые API кладёт в outbox
+// Почтальон: рассылает уведомления и наряды, которые API кладёт в outbox.
+// Запускается после проверки режима: локальный бот, который не стартовал, не должен рассылать.
 if (db && encKey) {
   startOutbox({
     bot,
@@ -135,23 +199,14 @@ if (db && encKey) {
   console.warn('Уведомления выключены: не заданы DATABASE_URL или USER_ID_ENC_KEY');
 }
 
-const mode = process.env.BOT_MODE ?? 'polling';
-
 if (mode === 'webhook') {
-  // На сервере: MAX сам присылает апдейты на https://<домен>/webhook, Caddy передаёт их сюда
-  const domain = process.env.PUBLIC_DOMAIN;
-  const secret = process.env.WEBHOOK_SECRET;
-  if (!domain || !secret) {
-    console.error('Для BOT_MODE=webhook нужны PUBLIC_DOMAIN и WEBHOOK_SECRET');
-    process.exit(1);
-  }
+  const domain = process.env.PUBLIC_DOMAIN ?? '';
+  const secret = process.env.WEBHOOK_SECRET ?? '';
   const port = Number(process.env.BOT_PORT ?? 3002);
   await bot.start({ mode: 'webhook', options: { domain, port, path: '/webhook', secret } });
-  console.log(`Бот @${me.username} запущен (webhook https://${domain}/webhook, порт ${port})`);
+  console.log(`Бот @${botUsername} запущен (webhook https://${domain}/webhook, порт ${port})`);
 } else {
-  // Локально: бот сам спрашивает у MAX новые апдейты.
-  // Внимание: при старте polling снимает подписку webhook — не запускать с настоящим токеном,
-  // когда бот работает на сервере.
-  console.log(`Бот @${me.username} запущен (long polling)`);
+  // Локально: бот сам спрашивает у MAX новые апдейты
+  console.log(`Бот @${botUsername} запущен (long polling)`);
   await bot.start();
 }

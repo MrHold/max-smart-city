@@ -160,8 +160,10 @@ echo '0 1 * * * root /opt/max-smart-city/scripts/backup-db.sh >> /var/log/msc-ba
 # на сервере — выключить боевого бота
 docker compose stop bot
 
-# у себя — BOT_MODE=polling в .env, база поднята и мигрирована
-pnpm --filter @msc/bot exec tsx src/index.ts
+# у себя — BOT_MODE=polling в .env, база поднята и мигрирована.
+# Webhook остаётся записанным за токеном и после остановки бота на сервере, поэтому без
+# FORCE_POLLING=1 локальный бот откажется стартовать — это защита сервера
+FORCE_POLLING=1 pnpm --filter @msc/bot exec tsx src/index.ts
 # … проверили, Ctrl+C
 
 # на сервере — вернуть
