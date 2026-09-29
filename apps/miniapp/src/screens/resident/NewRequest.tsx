@@ -110,12 +110,14 @@ export function NewRequest() {
     return g;
   }, [cats.data]);
 
-  if (me.isPending || cats.isPending) return <Loading />;
+  if (me.isPending) return <Loading />;
   if (me.isError)
     return (
       <ErrorView error={me.error} message={me.error.message} onRetry={() => void me.refetch()} />
     );
+  // Без дома запрос категорий выключен и навсегда «загружается»: уходим на привязку раньше
   if (!me.data.house) return <Navigate to="/bind" replace />;
+  if (cats.isPending) return <Loading />;
   if (cats.isError)
     return (
       <ErrorView
@@ -132,6 +134,8 @@ export function NewRequest() {
   const isQuality = category?.kind === 'utility_quality';
   const isInterruption = category?.kind === 'utility_interruption';
   const needsTemp = isQuality || (isInterruption && category?.service === 'heating');
+  const isHotWater = category?.service === 'hot_water';
+  const [tMin, tMax] = isHotWater ? [0, 100] : [-30, 45];
 
   const tempValue = parseTemp(temp);
   // Календарь не даёт выбрать будущий день, но будущий час сегодня — даёт, а «Очистить»
@@ -147,8 +151,8 @@ export function NewRequest() {
     if ((scope === 'entrance' || scope === 'floor') && !entrance) return 'Укажите номер подъезда';
     if (scope === 'floor' && !floor) return 'Укажите этаж';
     if (needsTemp && tempValue === null) return 'Нужен замер температуры';
-    if (needsTemp && tempValue !== null && (tempValue < -30 || tempValue > 45))
-      return 'Температура от −30 до +45 °C';
+    if (needsTemp && tempValue !== null && (tempValue < tMin || tempValue > tMax))
+      return `Температура от ${tMin < 0 ? `−${-tMin}` : tMin} до +${tMax} °C`;
     if (isInterruption && planned === null) return 'Ответьте, было ли объявление об отключении';
     return null;
   };
@@ -180,15 +184,24 @@ export function NewRequest() {
       category: category.code,
       location: {
         scope,
-        ...(entrance ? { entrance: Number(entrance) } : {}),
-        ...(floor ? { floor: Number(floor) } : {}),
-        ...(note ? { note } : {}),
+        ...(entrance && (scope === 'entrance' || scope === 'floor')
+          ? { entrance: Number(entrance) }
+          : {}),
+        ...(floor && scope === 'floor' ? { floor: Number(floor) } : {}),
+        ...(note && scope === 'yard' ? { note } : {}),
       },
       description,
       startedAt: new Date(startedAt).toISOString(),
       measurements:
         needsTemp && tempValue !== null
-          ? [{ value: tempValue, unit: 'celsius', measuredAt: new Date().toISOString(), place }]
+          ? [
+              {
+                value: tempValue,
+                unit: 'celsius',
+                measuredAt: demoClock.now().toISOString(),
+                place,
+              },
+            ]
           : [],
       plannedNotice: isInterruption ? planned : null,
       photoKeys: photos.map((p) => p.key),
@@ -244,6 +257,7 @@ export function NewRequest() {
                       icon={<Icon size={26} />}
                       onClick={() => {
                         setCategory(c);
+                        setPlace(c.service === 'hot_water' ? 'tap' : 'room');
                         const allowed = allowedScopes(c);
                         setScope((s) => (allowed.includes(s) ? s : (allowed[0] ?? 'apartment')));
                       }}
@@ -337,9 +351,11 @@ export function NewRequest() {
             <Card className="card__section">
               <div className="eyebrow eyebrow--accent">Замер температуры</div>
               <div className="hint">
-                {isQuality
-                  ? 'Норма: +18 °C в комнате, +20 °C в угловой. По замеру считаем перерасчёт.'
-                  : 'При перерыве отопления допустимая длительность зависит от температуры в комнате.'}
+                {isHotWater
+                  ? 'Норма: +60 °C из крана. По замеру считаем перерасчёт.'
+                  : isQuality
+                    ? 'Норма: +18 °C в комнате, +20 °C в угловой. По замеру считаем перерасчёт.'
+                    : 'При перерыве отопления допустимая длительность зависит от температуры в комнате.'}
               </div>
               <Field label="Температура" htmlFor="temp">
                 <div className="input--unit">
@@ -448,9 +464,9 @@ export function NewRequest() {
             label="Где"
             value={[
               scopes.find((s) => s.value === scope)?.label,
-              entrance && `подъезд ${entrance}`,
-              floor && `этаж ${floor}`,
-              note,
+              (scope === 'entrance' || scope === 'floor') && entrance && `подъезд ${entrance}`,
+              scope === 'floor' && floor && `этаж ${floor}`,
+              scope === 'yard' && note,
             ]
               .filter(Boolean)
               .join(', ')}
