@@ -288,6 +288,18 @@ suite('заявки', () => {
     );
     expect(heatingInYard.statusCode).toBe(400);
 
+    const liftWithoutFloor = await call(
+      'POST',
+      '/api/requests',
+      AUTHOR,
+      newRequest({
+        category: 'elevator',
+        measurements: [],
+        location: { scope: 'entrance', entrance: 2 },
+      }),
+    );
+    expect(liftWithoutFloor.statusCode).toBe(400);
+
     const yardInYard = await call(
       'POST',
       '/api/requests',

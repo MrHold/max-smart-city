@@ -10,6 +10,12 @@ describe('где может быть проблема', () => {
     expect(allowedScopes({ kind: 'repair', zone: 'entrance' })).toEqual(['entrance', 'floor']);
   });
 
+  it('лифт — только с этажом', () => {
+    expect(allowedScopes({ code: 'elevator', kind: 'repair', zone: 'entrance' })).toEqual([
+      'floor',
+    ]);
+  });
+
   it('отопление и вода — в квартире', () => {
     expect(allowedScopes({ kind: 'utility_quality' })).toEqual(['apartment']);
     expect(allowedScopes({ kind: 'utility_interruption' })).toEqual(['apartment']);
