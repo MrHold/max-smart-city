@@ -20,7 +20,8 @@ function ResultNote({ r }: { r: BulkResult }) {
   return (
     <div className={cx('banner', r.skipped.length ? 'banner--warn' : 'banner--accent')}>
       <div>
-        Обновлено {r.updated} {plural(r.updated, 'заявка', 'заявки', 'заявок')}
+        {plural(r.updated, 'Обновлена', 'Обновлены', 'Обновлено')} {r.updated}{' '}
+        {plural(r.updated, 'заявка', 'заявки', 'заявок')}
         {r.skipped.length > 0 && `, пропущено ${r.skipped.length}`}
       </div>
       {r.skipped.map((s) => (
@@ -41,7 +42,8 @@ function RejectForm({ ids, act }: { ids: string[]; act: Act }) {
         rows={3}
         maxLength={500}
         aria-label="Причина отклонения"
-        placeholder="Причина: жители увидят её в заявке"
+        name="reason"
+        placeholder="Причина: жители увидят её в заявке…"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
       />
@@ -73,7 +75,12 @@ function AssignForm({ c, act }: { c: ClusterCard; act: Act }) {
   const [rejecting, setRejecting] = useState(false);
 
   if (executors.isPending) return <Loading />;
-  if (executors.isError) return <div className="field__error">{executors.error.message}</div>;
+  if (executors.isError)
+    return (
+      <div className="field__error" role="alert">
+        {executors.error.message}
+      </div>
+    );
 
   const fits = (categories: string[]) => categories.includes(c.category);
   const list = [...executors.data].sort(
@@ -207,7 +214,7 @@ function CompleteForm({ c, act }: { c: ClusterCard; act: Act }) {
         <div className="photos">
           {photos.map((p) => (
             <div className="thumb" key={p.key}>
-              {p.url ? <img src={p.url} alt="" /> : <IconCamera size={22} />}
+              {p.url ? <img src={p.url} alt="" width={76} height={76} /> : <IconCamera size={22} />}
             </div>
           ))}
           {photos.length < 5 && (
@@ -224,7 +231,11 @@ function CompleteForm({ c, act }: { c: ClusterCard; act: Act }) {
           )}
         </div>
       </div>
-      {photoError && <div className="field__error">{photoError}</div>}
+      {photoError && (
+        <div className="field__error" role="alert">
+          {photoError}
+        </div>
+      )}
       {photos.length === 0 && (
         <div className="hint">Без фото жителю нечего проверять: добавьте хотя бы одно.</div>
       )}
@@ -367,7 +378,7 @@ export function ClusterPanel({
                 value={`+${formatRub(c.perHourKopecks)} / ч`}
                 label="растёт, пока не устранят"
               />
-              <Stat small value={fmtDateTime(c.startedAt)} label="проблема с" />
+              <Stat small value={fmtDateTime(c.startedAt)} label="начало проблемы" />
             </div>
           </>
         ) : (
@@ -376,7 +387,11 @@ export function ClusterPanel({
       </Card>
 
       {act.data && <ResultNote r={act.data} />}
-      {act.isError && <div className="field__error">{act.error.message}</div>}
+      {act.isError && (
+        <div className="field__error" role="alert">
+          {act.error.message}
+        </div>
+      )}
       <Actions c={c} act={act} />
 
       <Card className="card__section">

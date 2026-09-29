@@ -79,7 +79,11 @@ export function DemoClockControl() {
         Сдвиг общий для всех: сроки, просрочка, сумма перерасчёта и шаг «жалоба в ГЖИ» считаются по
         перемотанному времени. Работает только в демо-режиме сервера.
       </div>
-      {shift.isError && <div className="field__error">{shift.error.message}</div>}
+      {shift.isError && (
+        <div className="field__error" role="alert">
+          {shift.error.message}
+        </div>
+      )}
     </div>
   );
 }

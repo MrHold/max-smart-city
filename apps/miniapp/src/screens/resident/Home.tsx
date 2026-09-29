@@ -1,41 +1,26 @@
 import { Link, Navigate } from 'react-router-dom';
-import { useHome, useMe, useMyRequests } from '../../api/hooks';
-import type { Contact } from '../../api/types';
-import { fmtDate } from '../../lib/format';
-import { closedStatuses, statusLabel, statusTone } from '../../lib/request';
-import { ButtonLink, CallButton, Card, Chip, ErrorView, Loading, SectionHeader } from '../../ui';
-import { IconChevron, IconPlus } from '../../ui/icons';
+import { useHome, useMe, useMyRequests, useRequest } from '../../api/hooks';
+import { closedStatuses } from '../../lib/request';
+import {
+  ButtonLink,
+  CallButton,
+  Card,
+  canDial,
+  ErrorView,
+  formatRub,
+  Loading,
+  PageHeader,
+  PhoneAction,
+  RowLink,
+  SectionHeader,
+} from '../../ui';
+import { IconBuilding, IconPlus, IconUsers, IconWarning } from '../../ui/icons';
+import { RequestRow } from './RequestRow';
 
-const contactTitle: Record<Contact['kind'], string> = {
-  dispatcher: 'Диспетчер УК',
-  office: 'Офис управляющей компании',
-  emergency: 'Аварийная служба',
-};
-
-function ContactRow({ c }: { c: Contact }) {
-  const emergency = c.kind === 'emergency';
-  return (
-    <div className="list-item">
-      <div className="grow stack">
-        <div className="list-item__title">{contactTitle[c.kind]}</div>
-        {emergency ? (
-          <div className="status-line status-line--danger">Круглосуточно · протечка, нет света</div>
-        ) : c.open ? (
-          <div
-            className={`status-line ${c.open.isOpen ? 'status-line--ok' : 'status-line--muted'}`}
-          >
-            <span className="dot" />
-            {c.open.isOpen ? `На связи до ${c.open.until ?? ''}` : 'Сейчас закрыто'}
-          </div>
-        ) : null}
-      </div>
-      <CallButton
-        phone={c.phone}
-        tone={emergency ? 'danger' : c.kind === 'office' ? 'outline' : 'primary'}
-        label={`Позвонить: ${contactTitle[c.kind]}`}
-      />
-    </div>
-  );
+/** «Казань, ул. Садовая, 12» → город в надзаголовок, улицу с домом крупно */
+function splitAddress(address: string): [string, string] {
+  const i = address.indexOf(', ');
+  return i > 0 ? [address.slice(0, i), address.slice(i + 2)] : ['', address];
 }
 
 export function Home() {
@@ -43,6 +28,10 @@ export function Home() {
   const houseId = me.data?.house?.id;
   const home = useHome(houseId);
   const requests = useMyRequests();
+  const active = (requests.data ?? []).filter((r) => !closedStatuses.includes(r.status));
+  const first = active[0];
+  // Сумма перерасчёта есть только в карточке заявки — берём её по первой открытой
+  const detail = useRequest(first?.id, Boolean(first));
 
   if (me.isPending) return <Loading />;
   if (me.isError)
@@ -51,86 +40,145 @@ export function Home() {
     );
   if (!me.data.house) return <Navigate to="/bind" replace />;
 
-  const active = (requests.data ?? []).filter((r) => !closedStatuses.includes(r.status));
-  const first = active[0];
+  const [city, street] = splitAddress(me.data.house.address);
+  const aptNo = (me.data.apartmentLabel ?? '').replace(/^кв\.?\s*/i, '');
+  const kopecks = detail.data?.liability?.apartmentKopecks ?? 0;
+  const dispatcher = home.data?.contacts.find((c) => c.kind === 'dispatcher');
+  const emergency = home.data?.contacts.find((c) => c.kind === 'emergency');
+  const org = home.data?.org;
 
   return (
     <main className="page">
-      <div className="stack">
-        <div className="eyebrow">Ваш дом</div>
-        <h1 className="h1 h1--lg">{me.data.house.address}</h1>
-        <div className="muted">
-          {me.data.apartmentLabel}
-          {home.data?.org && ` · ${home.data.org.name}`}
-        </div>
-      </div>
+      {/* Сверху дом и главное действие; разделы уже есть в таббаре */}
+      <PageHeader
+        hero
+        eyebrow={[city, aptNo && `кв. ${aptNo}`].filter(Boolean).join(' · ')}
+        title={street}
+      >
+        <ButtonLink
+          to="/requests/new"
+          variant="secondary"
+          size="lg"
+          stretched
+          className="btn--light"
+        >
+          <IconPlus size={20} />
+          Сообщить о проблеме
+        </ButtonLink>
+      </PageHeader>
 
       {me.data.role === 'dispatcher' && (
-        <Link to="/dispatcher" className="banner banner--accent">
-          <div className="grow" style={{ fontSize: 14 }}>
-            <strong>Кабинет диспетчера</strong> — входящие по домам организации
-          </div>
-          <IconChevron size={18} />
-        </Link>
+        <Card pad={false} className="list">
+          <RowLink
+            to="/dispatcher"
+            icon={<IconUsers size={20} />}
+            tone="warn"
+            title="Кабинет диспетчера"
+            sub="Входящие заявки по домам УК"
+          />
+        </Card>
       )}
 
-      <div className="stack-8">
-        <SectionHeader title="Контакты" action="График" to="/contacts" />
-        {home.isPending ? (
-          <Loading />
-        ) : home.isError ? (
-          <ErrorView
-            error={home.error}
-            message={home.error.message}
-            onRetry={() => void home.refetch()}
-          />
-        ) : (
-          <Card pad={false} className="list">
-            {home.data.contacts.map((c) => (
-              <ContactRow key={c.kind} c={c} />
-            ))}
-          </Card>
-        )}
-      </div>
-
-      <ButtonLink to="/requests/new" size="lg" stretched>
-        <IconPlus />
-        Сообщить о проблеме
-      </ButtonLink>
-
-      <div className="stack-8">
-        <SectionHeader
-          title="Мои заявки"
-          action={active.length ? `Все · ${active.length}` : 'Все'}
-          to="/requests"
+      {/* Свои открытые заявки — выше справочного: срок и сумма и есть суть продукта */}
+      {requests.isPending ? (
+        <Loading compact />
+      ) : requests.isError ? (
+        <ErrorView
+          error={requests.error}
+          message={requests.error.message}
+          onRetry={() => void requests.refetch()}
         />
-        {first ? (
-          <Card to={`/requests/${first.id}`}>
-            <div className="stack-8">
-              <div className="row row--between">
-                <div className="list-item__title">{first.title}</div>
-                <Chip tone={first.overdue ? 'danger' : statusTone[first.status]}>
-                  {first.overdue ? 'Срок вышел' : statusLabel[first.status]}
-                </Chip>
-              </div>
-              <div className="muted num">
-                № {first.number} · срок до {fmtDate(first.dueAt)}
-                {first.joinersCount > 0 && ` · ${first.joinersCount + 1} кв.`}
-              </div>
-            </div>
-          </Card>
-        ) : (
-          <Card>
-            <div className="muted">Открытых заявок нет</div>
-          </Card>
-        )}
-      </div>
+      ) : active.length > 0 ? (
+        <div className="stack-8">
+          <SectionHeader title="Мои заявки" action={`Все · ${active.length}`} to="/requests" />
+          {kopecks > 0 && first && (
+            <Card pad={false} className="list">
+              <RowLink
+                to={`/requests/${first.id}`}
+                icon={<span className="icon-sq__glyph">₽</span>}
+                tone="ok"
+                title="Перерасчёт"
+                sub={`по заявке № ${first.number}`}
+                value={<span className="row-link__money num">{formatRub(kopecks)}</span>}
+              />
+            </Card>
+          )}
+          {active.slice(0, 3).map((r) => (
+            <RequestRow key={r.id} r={r} />
+          ))}
+        </div>
+      ) : null}
 
       {home.data?.announcement && (
-        <div className="banner banner--warn">
-          <div className="eyebrow">{home.data.announcement.title}</div>
-          <div>{home.data.announcement.text}</div>
+        <div className="notice">
+          <div className="grow stack">
+            <div className="notice__title">{home.data.announcement.title}</div>
+            <div className="notice__text">{home.data.announcement.text}</div>
+          </div>
+          <span className="icon-sq icon-sq--warn" aria-hidden="true">
+            <IconWarning size={20} />
+          </span>
         </div>
+      )}
+
+      {home.isPending ? (
+        <Loading compact />
+      ) : home.isError ? (
+        <ErrorView
+          error={home.error}
+          message={home.error.message}
+          onRetry={() => void home.refetch()}
+        />
+      ) : (
+        <>
+          {org && (
+            <Card className="card__section">
+              <div className="row" style={{ gap: 12 }}>
+                <span className="icon-sq" aria-hidden="true">
+                  <IconBuilding size={20} />
+                </span>
+                <div className="grow stack">
+                  <div className="list-item__title">{org.name}</div>
+                  {dispatcher?.open ? (
+                    <div
+                      className={`status-line ${dispatcher.open.isOpen ? 'status-line--ok' : 'status-line--muted'}`}
+                    >
+                      <span className="dot" />
+                      {dispatcher.open.isOpen
+                        ? `Диспетчер на связи до ${dispatcher.open.until ?? ''}`
+                        : 'Диспетчер сейчас не отвечает'}
+                    </div>
+                  ) : (
+                    <div className="muted">Управляющая организация</div>
+                  )}
+                </div>
+              </div>
+              {/* На компьютере вместо звонка номер с копированием: он длиннее, кнопки друг под другом */}
+              <div className={canDial() ? 'duo' : 'stack-8'}>
+                {dispatcher && <PhoneAction phone={dispatcher.phone} />}
+                <ButtonLink to="/contacts" variant="secondary">
+                  Все контакты
+                </ButtonLink>
+              </div>
+            </Card>
+          )}
+          {emergency && (
+            <div className="sos">
+              <span className="icon-sq icon-sq--danger" aria-hidden="true">
+                <IconWarning size={20} />
+              </span>
+              <div className="grow stack">
+                <div className="list-item__title">Аварийная служба</div>
+                <div className="sos__cap">Круглосуточно: протечка, нет света, запах газа</div>
+              </div>
+              <CallButton
+                phone={emergency.phone}
+                tone="danger"
+                label="Позвонить в аварийную службу"
+              />
+            </div>
+          )}
+        </>
       )}
 
       {home.data?.house.dataKind === 'model' && (

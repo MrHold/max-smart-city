@@ -70,6 +70,7 @@ export function JoinRequest() {
   return (
     <main className="page page--no-tabbar page--with-cta">
       <PageHeader
+        backTo="/"
         eyebrow="Заявка соседа"
         title={r.title}
         subtitle={`${r.locationText} · от ${fmtDateTime(r.createdAt)}`}
@@ -99,8 +100,10 @@ export function JoinRequest() {
       >
         <input
           id="apt"
+          name="apartment"
           className="input"
           inputMode="numeric"
+          autoComplete="off"
           maxLength={4}
           placeholder={me.data?.apartmentLabel ?? '48'}
           value={apartment}
@@ -112,9 +115,11 @@ export function JoinRequest() {
           <div className="eyebrow">Ваш замер, если есть</div>
           <div className="input--unit">
             <input
+              name="temperature"
               className="input"
               inputMode="decimal"
-              placeholder="16"
+              autoComplete="off"
+              placeholder="Например, 16…"
               value={temp}
               onChange={(e) => setTemp(e.target.value)}
               aria-label="Температура"
@@ -131,7 +136,11 @@ export function JoinRequest() {
           </div>
         </Card>
       )}
-      {error && <div className="field__error">{error}</div>}
+      {error && (
+        <div className="field__error" role="alert">
+          {error}
+        </div>
+      )}
       <div className="cta">
         <Button size="lg" loading={join.isPending} onClick={() => void submit()}>
           У меня тоже

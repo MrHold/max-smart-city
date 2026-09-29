@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useBindHouse, useHouseSearch } from '../../api/hooks';
 import type { HouseSearchItem } from '../../api/types';
-import { Button, Card, Field, PageHeader, ProvenanceChip } from '../../ui';
-import { IconSearch } from '../../ui/icons';
+import { Button, Card, Field, PageHeader, ProvenanceChip, Spot } from '../../ui';
+import { IconHome, IconSearch } from '../../ui/icons';
 
 export function BindHouse() {
   const navigate = useNavigate();
@@ -30,24 +30,30 @@ export function BindHouse() {
 
   return (
     <main className="page page--no-tabbar page--with-cta">
+      <Spot icon={<IconHome size={34} />} />
       <PageHeader
+        center
         eyebrow="Первый вход"
         title="Где вы живёте?"
         subtitle="Дом привязывается один раз, дальше всё сразу"
       />
       <Field label="Адрес дома" htmlFor="q">
-        <div className="input--unit">
-          <IconSearch size={18} style={{ color: 'var(--ink-3)' }} />
+        <div className="input-search">
+          <IconSearch size={18} />
           <input
             id="q"
+            name="address"
+            type="search"
+            enterKeyHint="search"
             className="input"
-            placeholder="Улица и номер дома"
+            placeholder="Например, Садовая, 12…"
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
               setHouse(null);
             }}
             autoComplete="off"
+            spellCheck={false}
           />
         </div>
       </Field>
@@ -90,8 +96,10 @@ export function BindHouse() {
           >
             <input
               id="apt"
+              name="apartment"
               className="input"
               inputMode="numeric"
+              autoComplete="off"
               maxLength={4}
               value={apartment}
               onChange={(e) => setApartment(e.target.value.replace(/\D/g, ''))}
@@ -99,7 +107,11 @@ export function BindHouse() {
           </Field>
         </>
       )}
-      {error && <div className="field__error">{error}</div>}
+      {error && (
+        <div className="field__error" role="alert">
+          {error}
+        </div>
+      )}
       <div className="cta">
         <Button size="lg" loading={bind.isPending} disabled={!house} onClick={() => void submit()}>
           Это мой дом

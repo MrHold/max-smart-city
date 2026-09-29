@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMyRequests } from '../../api/hooks';
-import { fmtDate } from '../../lib/format';
-import { closedStatuses, statusLabel, statusTone } from '../../lib/request';
-import { ButtonLink, Card, Chip, Empty, ErrorView, Loading, Segmented } from '../../ui';
-import { IconPlus } from '../../ui/icons';
+import { closedStatuses } from '../../lib/request';
+import { ButtonLink, Empty, ErrorView, Loading, PageHeader, Segmented } from '../../ui';
+import { IconList, IconPlus } from '../../ui/icons';
+import { RequestRow } from './RequestRow';
 
 export function Requests() {
   const q = useMyRequests();
@@ -19,44 +19,45 @@ export function Requests() {
 
   return (
     <main className="page">
-      <div className="row row--between">
-        <h1 className="h1">Заявки</h1>
-        <ButtonLink to="/requests/new" size="sm">
-          <IconPlus size={18} />
-          Новая
-        </ButtonLink>
-      </div>
-      <Segmented
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: 'active', label: `Активные · ${active.length}` },
-          { value: 'closed', label: `Закрытые · ${closed.length}` },
-        ]}
-      />
+      <PageHeader
+        hero
+        title="Заявки"
+        subtitle="Ваши заявки и те, к которым вы присоединились"
+        actions={
+          <ButtonLink to="/requests/new" variant="secondary" className="btn--on-hero">
+            <IconPlus size={16} />
+            Новая
+          </ButtonLink>
+        }
+      >
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'active', label: `Активные · ${active.length}` },
+            { value: 'closed', label: `Закрытые · ${closed.length}` },
+          ]}
+        />
+      </PageHeader>
       {list.length === 0 ? (
-        <Empty title={tab === 'active' ? 'Открытых заявок нет' : 'Закрытых заявок нет'} />
+        <Empty
+          icon={<IconList size={34} />}
+          title={tab === 'active' ? 'Открытых заявок нет' : 'Закрытых заявок нет'}
+          text={
+            tab === 'active'
+              ? 'Если что-то сломалось в доме, создайте заявку: соседи смогут присоединиться.'
+              : 'Здесь появятся заявки, которые вы подтвердили или УК отклонила.'
+          }
+        >
+          {tab === 'active' && (
+            <ButtonLink to="/requests/new">
+              <IconPlus size={18} />
+              Сообщить о проблеме
+            </ButtonLink>
+          )}
+        </Empty>
       ) : (
-        list.map((r) => (
-          <Card key={r.id} to={`/requests/${r.id}`}>
-            <div className="stack-8">
-              <div className="row row--between">
-                <div className="muted num">
-                  № {r.number} · от {fmtDate(r.createdAt)}
-                </div>
-                <Chip tone={r.overdue ? 'danger' : statusTone[r.status]}>
-                  {r.overdue ? 'Срок вышел' : statusLabel[r.status]}
-                </Chip>
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{r.title}</div>
-              <div className="muted">
-                {r.locationText}
-                {r.joinersCount > 0 && ` · ${r.joinersCount + 1} кв.`}
-                {!closedStatuses.includes(r.status) && ` · срок до ${fmtDate(r.dueAt)}`}
-              </div>
-            </div>
-          </Card>
-        ))
+        list.map((r) => <RequestRow key={r.id} r={r} />)
       )}
     </main>
   );
