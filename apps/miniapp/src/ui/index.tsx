@@ -295,9 +295,9 @@ export function Timeline({ steps }: { steps: TimelineStep[] }) {
   );
 }
 
-export function Loading({ text, compact }: { text?: string; compact?: boolean }) {
+export function Loading({ text }: { text?: string }) {
   return (
-    <div className={cx('center', compact && 'center--compact')} role="status">
+    <div className="center" role="status">
       <div className="spinner" />
       {text && <div className="muted">{text}</div>}
     </div>
