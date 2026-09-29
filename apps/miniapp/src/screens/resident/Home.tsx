@@ -57,7 +57,7 @@ export function Home() {
   return (
     <main className="page">
       <div className="stack">
-        <div className="eyebrow">Ваш дом</div>
+        <div className="caption">Ваш дом</div>
         <h1 className="h1 h1--lg">{me.data.house.address}</h1>
         <div className="muted">
           {me.data.apartmentLabel}
@@ -77,7 +77,7 @@ export function Home() {
       <div className="stack-8">
         <SectionHeader title="Кому звонить сейчас" action="График" to="/contacts" />
         {home.isPending ? (
-          <Loading />
+          <Loading compact />
         ) : home.isError ? (
           <ErrorView
             error={home.error}
@@ -92,6 +92,13 @@ export function Home() {
           </Card>
         )}
       </div>
+
+      {home.data?.announcement && (
+        <div className="banner banner--warn">
+          <div className="eyebrow">{home.data.announcement.title}</div>
+          <div>{home.data.announcement.text}</div>
+        </div>
+      )}
 
       <ButtonLink to="/requests/new" size="lg" stretched>
         <IconPlus />
@@ -125,13 +132,6 @@ export function Home() {
           </Card>
         )}
       </div>
-
-      {home.data?.announcement && (
-        <div className="banner banner--warn">
-          <div className="eyebrow">{home.data.announcement.title}</div>
-          <div>{home.data.announcement.text}</div>
-        </div>
-      )}
 
       {home.data?.house.dataKind === 'model' && (
         <div className="hint">

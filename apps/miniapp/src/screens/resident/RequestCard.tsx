@@ -191,32 +191,28 @@ function LiabilityBlock({ l, closed }: { l: Liability; closed: boolean }) {
             : 'Сумма появится, как только нарушение продлится дольше допустимого.'}
         </div>
       )}
-      <details>
-        <summary className="muted" style={{ cursor: 'pointer' }}>
-          Как посчитано
-        </summary>
-        <div className="steps-list" style={{ marginTop: 8 }}>
-          {l.steps.map((s) => (
-            <div className="step-row" key={s.label}>
-              <div className="grow">
-                <div>{s.label}</div>
-                {s.ref && (
-                  <div className="hint">
-                    {s.ref.act}, {s.ref.point}
-                  </div>
-                )}
-              </div>
+      <div className="sum">
+        {l.steps.map((s) => (
+          <div className="sum-row" key={s.label}>
+            <span className="sum-row__label">
+              <span>{s.label}</span>
               <ProvenanceChip value={s.provenance} />
-              <span className="step-row__value">
-                {s.value.toLocaleString('ru-RU')} {s.unit}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="hint" style={{ marginTop: 8 }}>
-          Правила версии {l.rulesVersion}. Сумма по дому — оценка: площади соседей неизвестны.
-        </div>
-      </details>
+            </span>
+            <span className="sum-row__value">
+              {s.value.toLocaleString('ru-RU')} {s.unit}
+            </span>
+          </div>
+        ))}
+        {counting && (
+          <div className="sum-row sum-row--total">
+            <span className="sum-row__label">Итого вам</span>
+            <span className="sum-row__value">{formatRub(l.apartmentKopecks)}</span>
+          </div>
+        )}
+      </div>
+      <div className="hint">
+        Правила версии {l.rulesVersion}. Сумма по дому — оценка: площади соседей неизвестны.
+      </div>
     </Card>
   );
 }
@@ -369,7 +365,8 @@ export function RequestCard() {
           <div className="eyebrow">Документы</div>
           {r.claim.available && (
             <Button
-              variant="secondary"
+              size="lg"
+              className="btn--split"
               loading={doc.isPending && doc.variables?.filename.startsWith('claim')}
               onClick={() =>
                 doc.mutate({
@@ -380,7 +377,10 @@ export function RequestCard() {
                 })
               }
             >
-              Заявление на перерасчёт (PDF)
+              {r.liability && r.liability.apartmentKopecks > 0 && (
+                <span className="btn__value">{formatRub(r.liability.apartmentKopecks)}</span>
+              )}
+              Скачать заявление
             </Button>
           )}
           {r.gji.available ? (

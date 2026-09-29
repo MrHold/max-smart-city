@@ -170,7 +170,7 @@ export function PageHeader({
 }) {
   return (
     <div className="stack">
-      {eyebrow && <div className="eyebrow">{eyebrow}</div>}
+      {eyebrow && <div className="caption">{eyebrow}</div>}
       <h1 className={cx('h1', large && 'h1--lg')}>{title}</h1>
       {subtitle && <div className="muted">{subtitle}</div>}
     </div>
@@ -295,9 +295,9 @@ export function Timeline({ steps }: { steps: TimelineStep[] }) {
   );
 }
 
-export function Loading({ text }: { text?: string }) {
+export function Loading({ text, compact }: { text?: string; compact?: boolean }) {
   return (
-    <div className="center" role="status">
+    <div className={cx('center', compact && 'center--compact')} role="status">
       <div className="spinner" />
       {text && <div className="muted">{text}</div>}
     </div>

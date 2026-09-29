@@ -171,7 +171,7 @@ export function DispatcherInbox() {
         </Link>
         <div className="row row--between wrap">
           <div>
-            <div className="eyebrow">{inbox.data?.orgName ?? 'Управляющая организация'}</div>
+            <div className="caption">{inbox.data?.orgName ?? 'Управляющая организация'}</div>
             <h1 className="h1">Кабинет диспетчера</h1>
           </div>
           <div style={{ minWidth: 240 }}>

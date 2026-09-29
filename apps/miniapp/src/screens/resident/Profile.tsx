@@ -1,9 +1,10 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useBecomeDispatcher, useMe } from '../../api/hooks';
 import { getPlatform, isMockBridge } from '../../bridge';
 import { isDemoMode } from '../../clock';
 import { DemoClockControl } from '../../clock/DemoClockControl';
 import { Button, ButtonLink, Card, ErrorView, Loading, PageHeader, Stat } from '../../ui';
+import { IconChevron } from '../../ui/icons';
 
 const roleLabel: Record<string, string> = {
   resident: 'Житель',
@@ -34,9 +35,16 @@ export function Profile() {
         ) : (
           <div className="muted">Дом не привязан</div>
         )}
-        <ButtonLink to="/bind" variant="secondary" size="sm">
+        <Link to="/bind" className="inset inset--link">
           {me.data.house ? 'Сменить дом' : 'Привязать дом'}
-        </ButtonLink>
+          <IconChevron size={18} className="chev" />
+        </Link>
+        {me.data.house && (
+          <Link to="/house" className="inset inset--link">
+            Паспорт дома
+            <IconChevron size={18} className="chev" />
+          </Link>
+        )}
       </Card>
       <div className="stats">
         <Stat small value={roleLabel[me.data.role ?? 'none']} label="роль" />
@@ -79,9 +87,10 @@ export function Profile() {
         <div className="muted">
           Что хранится, зачем, и кнопка «Удалить всё» — без письма оператору.
         </div>
-        <ButtonLink to="/profile/data" variant="secondary" size="sm">
+        <Link to="/profile/data" className="inset inset--link">
           Мои данные
-        </ButtonLink>
+          <IconChevron size={18} className="chev" />
+        </Link>
       </Card>
       {isDemoMode && (
         <Card>
