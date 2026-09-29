@@ -2,12 +2,22 @@ import { Keyboard } from '@maxhub/max-bot-api';
 
 export type OrderStage = 'assigned' | 'in_progress';
 
-/** Кнопки под нарядом по шагам: сначала «Принял», и только потом «Выполнено». */
+const allOrders = () => Keyboard.button.callback('🛠 Мои наряды', 'exe:orders');
+
+/**
+ * Кнопки под нарядом по шагам: сначала «Принял», и только потом «Выполнено».
+ * «Мои наряды» — здесь же: иначе про список нарядов исполнитель просто не узнает.
+ */
 export function orderKeyboard(requestId: string, stage: OrderStage) {
   const accept = Keyboard.button.callback('▶️ Принял', `exe:start:${requestId}`);
   const done = Keyboard.button.callback('✅ Выполнено', `exe:complete:${requestId}`);
   const cannot = Keyboard.button.callback('Не могу', `exe:decline:${requestId}`);
-  return Keyboard.inlineKeyboard(stage === 'assigned' ? [[accept], [cannot]] : [[done], [cannot]]);
+  return Keyboard.inlineKeyboard([[stage === 'assigned' ? accept : done], [cannot], [allOrders()]]);
+}
+
+/** Одна кнопка «Мои наряды» — к сообщениям исполнителю без кнопок наряда. */
+export function allOrdersKeyboard() {
+  return Keyboard.inlineKeyboard([[allOrders()]]);
 }
 
 /** «Мои наряды»: по кнопке на наряд — открыть его карточку заново. */
