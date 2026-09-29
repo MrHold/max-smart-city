@@ -99,6 +99,8 @@ export function useCreateRequest() {
     onSuccess: (r) => {
       qc.setQueryData(keys.request(r.id), r);
       void qc.invalidateQueries({ queryKey: keys.requests });
+      // Демо ведут одним аккаунтом: входящие диспетчера сразу видят изменения жителя
+      void qc.invalidateQueries({ queryKey: keys.dispatcherInbox });
     },
   });
 }
@@ -110,6 +112,7 @@ export function useJoinRequest(id: string) {
     onSuccess: (r) => {
       qc.setQueryData(keys.request(r.id), r);
       void qc.invalidateQueries({ queryKey: keys.requests });
+      void qc.invalidateQueries({ queryKey: keys.dispatcherInbox });
     },
   });
 }
@@ -122,6 +125,7 @@ export function useConfirmRequest(id: string) {
     onSuccess: (r) => {
       qc.setQueryData(keys.request(r.id), r);
       void qc.invalidateQueries({ queryKey: keys.requests });
+      void qc.invalidateQueries({ queryKey: keys.dispatcherInbox });
     },
   });
 }

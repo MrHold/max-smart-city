@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDispatcherInbox, useMe } from '../../api/hooks';
 import type { ClusterCard, DispatcherInbox as Inbox } from '../../api/types';
 import { useBackButton } from '../../bridge/back';
@@ -122,7 +122,14 @@ function ClusterList({ inbox, selectedKey }: { inbox: Inbox; selectedKey?: strin
         ]}
       />
       {shown.length === 0 ? (
-        <Empty title="Входящих нет" text="Открытых заявок этого вида нет" />
+        <Empty
+          title="Входящих нет"
+          text={
+            all.length === 0
+              ? 'Когда жители сообщат о проблеме, она появится здесь'
+              : 'Открытых заявок этого вида нет'
+          }
+        />
       ) : (
         <Card pad={false} className="list">
           {shown.map((c) => (
@@ -142,6 +149,14 @@ export function DispatcherInbox() {
   const wide = useMediaQuery('(min-width: 900px)');
   const isDispatcher = me.data?.role === 'dispatcher';
   const inbox = useDispatcherInbox(isDispatcher);
+  // disp_<id>: открыть группу, в которой лежит заявка, чтобы назначить другого исполнителя
+  const [params] = useSearchParams();
+  const wanted = params.get('request');
+  useEffect(() => {
+    if (!wanted || key || !inbox.data) return;
+    const c = inbox.data.clusters.find((x) => x.requestIds.includes(wanted));
+    navigate(c ? `/dispatcher/c/${encodeURIComponent(c.key)}` : '/dispatcher', { replace: true });
+  }, [wanted, key, inbox.data, navigate]);
   useBackButton(() => navigate(key || executorsTab ? '/dispatcher' : '/'));
 
   if (me.isPending) return <Loading />;
@@ -166,6 +181,7 @@ export function DispatcherInbox() {
 
   const selected = key ? inbox.data?.clusters.find((c) => c.key === key) : undefined;
   const showList = wide || !key;
+  const nothing = !key && inbox.data?.clusters.length === 0;
 
   return (
     <main className="page page--no-tabbar cab">
@@ -198,7 +214,8 @@ export function DispatcherInbox() {
           onRetry={() => void inbox.refetch()}
         />
       ) : (
-        <div className={cx('cab__grid', wide && 'cab__grid--wide')}>
+        // Входящих нет совсем — выбирать нечего: без заглушки справа, пустое состояние во всю ширину
+        <div className={cx('cab__grid', wide && !nothing && 'cab__grid--wide')}>
           {showList && <ClusterList inbox={inbox.data} selectedKey={key} />}
           {key ? (
             <ClusterPanel
@@ -208,8 +225,9 @@ export function DispatcherInbox() {
               onClose={() => navigate('/dispatcher')}
             />
           ) : (
-            wide && (
-              <Card className="cab__panel">
+            wide &&
+            !nothing && (
+              <Card className="cab__placeholder">
                 <Empty
                   title="Выберите заявку"
                   text="Заявки сгруппированы по проблеме: одна авария в доме — одна строка"

@@ -20,6 +20,38 @@ export function ensureWebApp(): WebApp {
   return window.WebApp as WebApp;
 }
 
+function errorText(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
+
+/**
+ * Поделиться через MAX. Вызывать прямо в обработчике нажатия и без await до вызова,
+ * иначе клиент не засчитает действие пользователя. Промис даёт причину неудачи или null.
+ */
+export function shareToMax(p: { text: string; link?: string }): Promise<string | null> {
+  let wa: WebApp;
+  try {
+    wa = ensureWebApp();
+  } catch (e) {
+    return Promise.resolve(errorText(e));
+  }
+  if (!wa.shareMaxContent) return Promise.resolve('shareMaxContent нет');
+  try {
+    return wa.shareMaxContent(p).then(
+      () => null,
+      (e: unknown) => errorText(e),
+    );
+  } catch (e) {
+    return Promise.resolve(errorText(e));
+  }
+}
+
 export function isMockBridge(): boolean {
   return installedMock;
 }

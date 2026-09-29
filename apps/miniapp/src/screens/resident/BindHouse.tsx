@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useBindHouse, useHouseSearch } from '../../api/hooks';
+import { useBindHouse, useHouseSearch, useMe } from '../../api/hooks';
 import type { HouseSearchItem } from '../../api/types';
+import { useBackButton } from '../../bridge/back';
 import { Button, Card, Field, PageHeader, ProvenanceChip, Spot } from '../../ui';
-import { IconHome, IconSearch } from '../../ui/icons';
+import { IconArrowLeft, IconHome, IconSearch } from '../../ui/icons';
 
 export function BindHouse() {
   const navigate = useNavigate();
@@ -14,6 +15,10 @@ export function BindHouse() {
   const [error, setError] = useState<string | null>(null);
   const search = useHouseSearch(q);
   const bind = useBindHouse();
+  // Дом уже привязан — сюда пришли из профиля «Сменить дом»: даём вернуться без выбора
+  const changing = Boolean(useMe().data?.house);
+  const goBack = () => navigate('/profile', { replace: true });
+  useBackButton(changing ? goBack : null);
 
   const submit = async () => {
     if (!house) return setError('Выберите дом');
@@ -30,12 +35,22 @@ export function BindHouse() {
 
   return (
     <main className="page page--no-tabbar page--with-cta">
+      {changing && (
+        <button type="button" className="back-link" onClick={goBack}>
+          <IconArrowLeft size={18} />
+          Назад
+        </button>
+      )}
       <Spot icon={<IconHome size={34} />} />
       <PageHeader
         center
-        eyebrow="Первый вход"
+        eyebrow={changing ? 'Смена дома' : 'Первый вход'}
         title="Где вы живёте?"
-        subtitle="Дом привязывается один раз, дальше всё сразу"
+        subtitle={
+          changing
+            ? 'Новые заявки пойдут в выбранный дом'
+            : 'Дом привязывается один раз, дальше всё сразу'
+        }
       />
       <Field label="Адрес дома" htmlFor="q">
         <div className="input-search">

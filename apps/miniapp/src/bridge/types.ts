@@ -30,6 +30,7 @@ export interface WebApp {
     mid?: string;
     chatType?: 'DIALOG' | 'CHAT';
     text?: string;
+    link?: string;
   }) => Promise<unknown>;
   /** Только https и только по клику пользователя; в веб-версии MAX не работает. */
   downloadFile?: (url: string, fileName: string) => Promise<unknown>;
