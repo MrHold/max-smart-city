@@ -75,7 +75,7 @@ export function Home() {
       )}
 
       <div className="stack-8">
-        <SectionHeader title="Кому звонить сейчас" action="График" to="/contacts" />
+        <SectionHeader title="Контакты" action="График" to="/contacts" />
         {home.isPending ? (
           <Loading />
         ) : home.isError ? (

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, useState } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import type { Provenance } from '../api/types';
@@ -62,6 +62,52 @@ export function ButtonLink({
   return <Link className={btnClass(variant, size, stretched, className)} {...rest} />;
 }
 
+/**
+ * Можно ли позвонить с этого устройства. Смотрим не на клиент MAX, а на указатель:
+ * палец (pointer: coarse) — телефон или планшет, там tel: открывает звонилку, в том
+ * числе в веб-версии MAX в мобильном браузере. Мышь — компьютер: там tel: вызывает
+ * системный вопрос «чем открыть», поэтому номер вместо звонка копируем.
+ */
+export function canDial(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true;
+}
+
+const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
+
+/** Скопировать номер; true — получилось. */
+async function copyPhone(phone: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(phone);
+    return true;
+  } catch {
+    // Старые WebView без Clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = phone;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }
+}
+
+/** Отметка «скопировано» на полторы секунды. */
+function useCopied(): [boolean, (phone: string) => void] {
+  const [copied, setCopied] = useState(false);
+  const copy = (phone: string) => {
+    void copyPhone(phone).then((ok) => {
+      if (!ok) return;
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return [copied, copy];
+}
+
+/** Круглая кнопка-трубка: на телефоне звонит, на компьютере копирует номер. */
 export function CallButton({
   phone,
   tone = 'primary',
@@ -71,18 +117,50 @@ export function CallButton({
   tone?: 'primary' | 'outline' | 'danger';
   label: string;
 }) {
+  const [copied, copy] = useCopied();
+  const className = cx(
+    'call',
+    tone === 'outline' && 'call--outline',
+    tone === 'danger' && 'call--danger',
+  );
+  if (canDial()) {
+    return (
+      <a className={className} href={telHref(phone)} aria-label={label}>
+        <IconPhone />
+      </a>
+    );
+  }
   return (
-    <a
-      className={cx(
-        'call',
-        tone === 'outline' && 'call--outline',
-        tone === 'danger' && 'call--danger',
-      )}
-      href={`tel:${phone.replace(/[^\d+]/g, '')}`}
-      aria-label={label}
+    <button
+      type="button"
+      className={className}
+      onClick={() => copy(phone)}
+      title={copied ? 'Номер скопирован' : `${phone} — нажмите, чтобы скопировать`}
+      aria-label={`${label}: ${phone}. Скопировать номер`}
     >
-      <IconPhone />
-    </a>
+      {copied ? <IconCheck /> : <IconPhone />}
+    </button>
+  );
+}
+
+/** Большая кнопка звонка (исполнитель в карточке заявки): на компьютере — номер и копирование. */
+export function PhoneAction({ phone }: { phone: string }) {
+  const [copied, copy] = useCopied();
+  if (canDial()) {
+    return (
+      <a className={btnClass('primary', 'md', undefined, undefined)} href={telHref(phone)}>
+        Позвонить
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={btnClass('secondary', 'md', undefined, undefined)}
+      onClick={() => copy(phone)}
+    >
+      {copied ? 'Номер скопирован' : `${phone} · скопировать`}
+    </button>
   );
 }
 
