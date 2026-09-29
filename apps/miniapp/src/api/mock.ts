@@ -647,6 +647,16 @@ export async function mockApi(path: string, init: RequestInit): Promise<unknown>
     const b = body as AssignInput;
     const e = executorsList.find((x) => x.id === b.executorId);
     if (!e) throw notFound();
+    // Как на сервере: исполнителя не по профилю назначить нельзя, заявка не меняется
+    const foreign = b.requestIds
+      .map((id) => requests.get(id))
+      .find((r) => r && !e.categories.includes(categoryOf(r)));
+    if (foreign) {
+      throw Object.assign(
+        new Error(`${e.nameShort} не выполняет работы по заявкам «${foreign.title}»`),
+        { code: 'executor_unqualified', status: 409 },
+      );
+    }
     const slot = b.plannedAt
       ? new Date(b.plannedAt).toLocaleString('ru-RU', {
           day: '2-digit',
