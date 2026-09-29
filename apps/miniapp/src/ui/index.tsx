@@ -75,14 +75,14 @@ export function canDial(): boolean {
 const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 
 /** Скопировать номер; true — получилось. */
-async function copyPhone(phone: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(phone);
+    await navigator.clipboard.writeText(text);
     return true;
   } catch {
     // Старые WebView без Clipboard API
     const ta = document.createElement('textarea');
-    ta.value = phone;
+    ta.value = text;
     ta.setAttribute('readonly', '');
     ta.style.position = 'fixed';
     ta.style.opacity = '0';
@@ -98,7 +98,7 @@ async function copyPhone(phone: string): Promise<boolean> {
 function useCopied(): [boolean, (phone: string) => void] {
   const [copied, setCopied] = useState(false);
   const copy = (phone: string) => {
-    void copyPhone(phone).then((ok) => {
+    void copyText(phone).then((ok) => {
       if (!ok) return;
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);

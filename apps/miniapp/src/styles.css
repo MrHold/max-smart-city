@@ -601,6 +601,12 @@ a.card:active {
   box-shadow: none;
   font-size: 15px;
 }
+/* Кнопка-иконка постоянной ширины: смена иконки не сдвигает соседнюю кнопку */
+.btn--icon {
+  width: 50px;
+  padding: 0;
+  flex-shrink: 0;
+}
 .btn--stretched {
   width: 100%;
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useConfirmRequest, useOpenDocument, useRequest } from '../../api/hooks';
 import type { Liability, RequestDetail } from '../../api/types';
-import { ensureWebApp } from '../../bridge';
+import { shareToMax } from '../../bridge';
 import { useBackButton } from '../../bridge/back';
 import { demoClock, useDemoOffset } from '../../clock';
 import { fmtDate, fmtDateTime, fmtDuration, plural } from '../../lib/format';
@@ -18,6 +18,7 @@ import {
   ButtonLink,
   Card,
   Chip,
+  copyText,
   ErrorView,
   formatRub,
   Loading,
@@ -28,7 +29,7 @@ import {
   Stat,
   Timeline,
 } from '../../ui';
-import { IconClock, IconCopy, IconShare, IconUser, IconUsers } from '../../ui/icons';
+import { IconCheck, IconClock, IconCopy, IconShare, IconUser, IconUsers } from '../../ui/icons';
 
 type Photo = RequestDetail['photos'][number];
 
@@ -105,26 +106,26 @@ function PhotoStrip({ photos }: { photos: Photo[] }) {
 
 function ShareBlock({ r }: { r: RequestDetail }) {
   const [copied, setCopied] = useState(false);
+  const [copiedNote, setCopiedNote] = useState(false);
+  // Временно, для проверки на ПК и телефоне: почему MAX не открыл «Поделиться»
+  const [shareError, setShareError] = useState<string | null>(null);
   const total = r.joinersCount + 1;
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(r.shareUrl);
+  const copy = () => {
+    void copyText(r.shareUrl).then((ok) => {
+      if (!ok) return;
       setCopied(true);
+      setCopiedNote(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {}
+      setTimeout(() => setCopiedNote(false), 4000);
+    });
   };
-  const share = async () => {
-    const wa = ensureWebApp();
-    // Соседям — суть и подъезд, но не квартира автора
+  const share = () => {
+    // Соседям — суть и подъезд, но не квартира автора; ссылка идёт отдельным полем
     const where = r.locationText.replace(/,?\s*кв\.\s*\S+/i, '');
-    const text = `${r.title} — ${where}. Если у вас так же, присоединяйтесь: ${r.shareUrl}`;
-    if (wa.shareMaxContent) {
-      try {
-        await wa.shareMaxContent({ text });
-        return;
-      } catch {}
-    }
-    await copy();
+    const text = `${r.title} — ${where}. Если у вас так же, присоединяйтесь по ссылке.`;
+    setShareError(null);
+    // Без await до вызова: MAX принимает шаринг только прямо из нажатия
+    void shareToMax({ text, link: r.shareUrl }).then((err) => err && setShareError(err));
   };
   return (
     <Card className="card__section card--accent">
@@ -143,21 +144,28 @@ function ShareBlock({ r }: { r: RequestDetail }) {
         </div>
       </div>
       <div className="row">
-        <Button className="grow" onClick={() => void share()}>
+        <Button className="grow" onClick={share}>
           <IconShare size={18} />
           Поделиться в чат дома
         </Button>
         <Button
           variant="secondary"
-          onClick={() => void copy()}
-          aria-label={copied ? 'Скопировано' : 'Скопировать ссылку'}
+          className="btn--icon"
+          onClick={copy}
+          aria-label={copied ? 'Ссылка скопирована' : 'Скопировать ссылку'}
         >
-          {copied ? 'Скопировано' : <IconCopy size={18} />}
+          {copied ? <IconCheck size={18} /> : <IconCopy size={18} />}
         </Button>
       </div>
-      <div className="hint">
-        Соседи откроют ссылку в MAX и присоединятся одной кнопкой. УК получит одну заявку с
-        масштабом вместо десятков дублей.
+      {shareError && (
+        <div className="field__error" role="alert">
+          Не удалось поделиться: {shareError}
+        </div>
+      )}
+      <div className="hint" aria-live="polite">
+        {copiedNote
+          ? 'Ссылка скопирована — вставьте её в чат дома'
+          : 'Соседи откроют ссылку в MAX и присоединятся одной кнопкой. УК получит одну заявку с масштабом вместо десятков дублей.'}
       </div>
     </Card>
   );

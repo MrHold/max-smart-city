@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useExecutorInvite } from '../../api/hooks';
 import type { Executor } from '../../api/types';
-import { ensureWebApp } from '../../bridge';
+import { shareToMax } from '../../bridge';
+import { copyText } from '../../ui';
 
 /** Ссылка-приглашение в бот: пока исполнитель её не открыл, наряды до него не дойдут. */
 export function InviteLink({
@@ -14,6 +15,8 @@ export function InviteLink({
 }) {
   const invite = useExecutorInvite();
   const [copied, setCopied] = useState(false);
+  // Временно, для проверки на ПК и телефоне: почему MAX не открыл «Поделиться»
+  const [shareError, setShareError] = useState<string | null>(null);
   const cls = buttons ? 'btn btn--secondary btn--sm' : 'link-btn';
 
   if (!invite.data) {
@@ -40,18 +43,18 @@ export function InviteLink({
   }
 
   const url = invite.data.url;
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
+  const copy = () => {
+    void copyText(url).then((ok) => {
+      if (!ok) return;
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {}
+    });
   };
   const share = () => {
-    const wa = ensureWebApp();
-    const text = `${executor.nameShort}, наряды по заявкам будут приходить в этот бот: ${url}`;
-    if (wa.shareMaxContent) void wa.shareMaxContent({ text });
-    else void copy();
+    const text = `${executor.nameShort}, наряды по заявкам будут приходить в этот бот.`;
+    setShareError(null);
+    // Без await до вызова: MAX принимает шаринг только прямо из нажатия
+    void shareToMax({ text, link: url }).then((err) => err && setShareError(err));
   };
 
   return (
@@ -61,7 +64,7 @@ export function InviteLink({
         className={cls}
         onClick={(e) => {
           e.preventDefault();
-          void copy();
+          copy();
         }}
       >
         {copied ? 'Скопировано' : 'Скопировать ссылку'}
@@ -76,6 +79,11 @@ export function InviteLink({
       >
         Отправить в MAX
       </button>
+      {shareError && (
+        <span className="field__error" role="alert">
+          Не удалось поделиться: {shareError}
+        </span>
+      )}
     </span>
   );
 }
