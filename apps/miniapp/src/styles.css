@@ -663,6 +663,25 @@ p {
   overflow: hidden;
   color: var(--ink-3);
 }
+.thumb--removable {
+  position: relative;
+}
+.thumb__remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
 .thumb img {
   width: 100%;
   height: 100%;

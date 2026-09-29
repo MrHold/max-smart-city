@@ -13,6 +13,7 @@ import {
   IconBulb,
   IconCamera,
   IconChevron,
+  IconClose,
   IconDrop,
   IconElevator,
   IconFire,
@@ -128,11 +129,18 @@ export function NewRequest() {
   const needsTemp = isQuality || (isInterruption && category?.service === 'heating');
 
   const tempValue = parseTemp(temp);
+  // Календарь не даёт выбрать будущий день, но будущий час сегодня — даёт, а «Очистить»
+  // оставляет поле пустым: проверяем сразу, чтобы ошибка была видна у самого поля.
+  const startedMs = new Date(startedAt).getTime();
+  const startedError = Number.isNaN(startedMs)
+    ? 'Укажите, когда началось'
+    : startedMs > demoClock.now().getTime()
+      ? 'Начало не может быть в будущем'
+      : null;
+
   const validateStep2 = (): string | null => {
     if ((scope === 'entrance' || scope === 'floor') && !entrance) return 'Укажите номер подъезда';
     if (scope === 'floor' && !floor) return 'Укажите этаж';
-    if (new Date(startedAt).getTime() > demoClock.now().getTime())
-      return 'Начало не может быть в будущем';
     if (needsTemp && tempValue === null) return 'Нужен замер температуры';
     if (needsTemp && tempValue !== null && (tempValue < -30 || tempValue > 45))
       return 'Температура от −30 до +45 °C';
@@ -148,8 +156,17 @@ export function NewRequest() {
       const res = await upload.mutateAsync(file);
       setPhotos((p) => [...p, { key: res.key, preview }]);
     } catch (e) {
+      URL.revokeObjectURL(preview);
       setError((e as Error).message);
     }
+  };
+
+  const removePhoto = (key: string) => {
+    setPhotos((list) => {
+      const gone = list.find((p) => p.key === key);
+      if (gone) URL.revokeObjectURL(gone.preview);
+      return list.filter((p) => p.key !== key);
+    });
   };
 
   const submit = async () => {
@@ -280,7 +297,7 @@ export function NewRequest() {
             )}
           </div>
 
-          <Field label="Когда началось" htmlFor="startedAt">
+          <Field label="Когда началось" htmlFor="startedAt" error={startedError ?? undefined}>
             <input
               id="startedAt"
               className="input"
@@ -351,9 +368,17 @@ export function NewRequest() {
           <div className="stack-8">
             <div className="eyebrow">Фото</div>
             <div className="photos">
-              {photos.map((p) => (
-                <div className="thumb" key={p.key}>
+              {photos.map((p, i) => (
+                <div className="thumb thumb--removable" key={p.key}>
                   <img src={p.preview} alt="Фото проблемы" />
+                  <button
+                    type="button"
+                    className="thumb__remove"
+                    aria-label={`Удалить фото ${i + 1}`}
+                    onClick={() => removePhoto(p.key)}
+                  >
+                    <IconClose size={14} />
+                  </button>
                 </div>
               ))}
               {photos.length < 5 && (
@@ -364,7 +389,11 @@ export function NewRequest() {
                     type="file"
                     accept="image/*"
                     hidden
-                    onChange={(e) => void onPhoto(e.target.files)}
+                    onChange={(e) => {
+                      void onPhoto(e.target.files);
+                      // иначе тот же файл после удаления не выбрать повторно
+                      e.target.value = '';
+                    }}
                   />
                 </label>
               )}
@@ -432,7 +461,7 @@ export function NewRequest() {
             onClick={() => {
               const err = validateStep2();
               setError(err);
-              if (!err) setStep(3);
+              if (!err && !startedError) setStep(3);
             }}
           >
             Далее: проверить
