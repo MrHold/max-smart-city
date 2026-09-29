@@ -313,6 +313,30 @@ suite('кабинет диспетчера', () => {
     expect(order?.description).toBeTruthy();
   });
 
+  it('одна проблема в доме — один наряд, сколько бы заявок по ней ни было', async () => {
+    await createAccepted(RESIDENT);
+    await createAccepted(NEIGHBOUR);
+    const card = (await inbox()).clusters[0];
+    expect(card?.requestIds).toHaveLength(2);
+    const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
+    const [someone] = await db.execute(sql`select id from users limit 1`).then((r) => r.rows);
+    await db.execute(
+      sql`update executors set user_id = ${someone?.id as string} where id = ${executors[0].id}`,
+    );
+
+    const res = await call('POST', '/api/dispatcher/assign', DISPATCHER, {
+      requestIds: card?.requestIds,
+      executorId: executors[0].id,
+    });
+    expect(res.json().updated).toBe(2);
+
+    const rows = await db.execute(sql`select payload from outbox`);
+    const types = rows.rows.map((r) => (r.payload as { type: string }).type);
+    expect(types.filter((t) => t === 'order')).toHaveLength(1);
+    // Жителям уведомление о назначении уходит каждому
+    expect(types.filter((t) => t === 'assigned')).toHaveLength(2);
+  });
+
   it('без привязки исполнителя к аккаунту наряд не отправляется, но заявка назначена', async () => {
     const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();

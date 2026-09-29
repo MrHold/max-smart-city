@@ -530,6 +530,7 @@ export const dispatcherRoutes =
         );
       }
 
+      const ordered = new Set<string>();
       return bulk(
         userId,
         parsed.data.requestIds,
@@ -544,23 +545,26 @@ export const dispatcherRoutes =
           nameShort: executor.nameShort,
           plannedAt: plannedAt ?? null,
         }),
-        // Наряд самому исполнителю — если он привязан к аккаунту MAX.
-        // Пока привязки нет, наряд просто не отправляется: заявка всё равно назначена.
-        (row) =>
-          executor.userId
-            ? {
-                userId: executor.userId,
-                payload: {
-                  type: 'order',
-                  requestId: row.id,
-                  number: row.number,
-                  address: addressOf.get(row.id) ?? '',
-                  category: row.category,
-                  description: row.description,
-                  plannedAt: plannedAt ?? null,
-                },
-              }
-            : null,
+        // Наряд самому исполнителю — если он привязан к аккаунту MAX; пока привязки нет,
+        // наряд не отправляется, но заявка всё равно назначена. Одна проблема в доме —
+        // один наряд, даже если по ней несколько заявок: иначе чат исполнителя тонет в дублях.
+        (row) => {
+          const problem = `${row.houseId}:${row.category}`;
+          if (!executor.userId || ordered.has(problem)) return null;
+          ordered.add(problem);
+          return {
+            userId: executor.userId,
+            payload: {
+              type: 'order',
+              requestId: row.id,
+              number: row.number,
+              address: addressOf.get(row.id) ?? '',
+              category: row.category,
+              description: row.description,
+              plannedAt: plannedAt ?? null,
+            },
+          };
+        },
       );
     });
 
