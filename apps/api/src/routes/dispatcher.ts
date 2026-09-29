@@ -518,6 +518,18 @@ export const dispatcherRoutes =
         .where(inArray(requests.id, parsed.data.requestIds));
       const addressOf = new Map(addressRows.map((r) => [r.requestId, r.address]));
 
+      const foreign = addressRows.find((r) => !executor.categories.includes(r.category));
+      if (foreign) {
+        const title =
+          data.regions.flatMap((r) => r.categories).find((c) => c.code === foreign.category)
+            ?.title ?? foreign.category;
+        throw new ApiError(
+          409,
+          'executor_unqualified',
+          `${executor.nameShort} не выполняет работы по заявкам «${title}»`,
+        );
+      }
+
       return bulk(
         userId,
         parsed.data.requestIds,
