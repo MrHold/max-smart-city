@@ -55,6 +55,16 @@ export function notificationText(p: Payload): string {
   }
 }
 
+/**
+ * Куда ведёт кнопка под уведомлением. Отказ исполнителя получают диспетчеры: им нужна
+ * не карточка жителя, а кабинет, чтобы сразу назначить другого. Остальным — карточка заявки.
+ */
+function appButton(type: string | undefined, requestId: string): { text: string; payload: string } {
+  if (type === 'executor_declined')
+    return { text: 'Назначить исполнителя', payload: `disp_${requestId}` };
+  return { text: 'Открыть заявку', payload: `req_${requestId}` };
+}
+
 type Row = { id: number; payload: unknown; attempts: number; userIdEnc: string | null };
 
 /**
@@ -126,10 +136,10 @@ export function startOutbox(deps: {
         [
           payload.requestId
             ? Keyboard.button.openApp(
-                'Открыть заявку',
+                appButton(payload.type, payload.requestId).text,
                 botUsername,
                 botId,
-                `req_${payload.requestId}`,
+                appButton(payload.type, payload.requestId).payload,
               )
             : Keyboard.button.openApp('Мой дом', botUsername, botId),
         ],
