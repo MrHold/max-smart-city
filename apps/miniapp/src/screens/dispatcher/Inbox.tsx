@@ -122,7 +122,14 @@ function ClusterList({ inbox, selectedKey }: { inbox: Inbox; selectedKey?: strin
         ]}
       />
       {shown.length === 0 ? (
-        <Empty title="Входящих нет" text="Открытых заявок этого вида нет" />
+        <Empty
+          title="Входящих нет"
+          text={
+            all.length === 0
+              ? 'Когда жители сообщат о проблеме, она появится здесь'
+              : 'Открытых заявок этого вида нет'
+          }
+        />
       ) : (
         <Card pad={false} className="list">
           {shown.map((c) => (
@@ -166,6 +173,7 @@ export function DispatcherInbox() {
 
   const selected = key ? inbox.data?.clusters.find((c) => c.key === key) : undefined;
   const showList = wide || !key;
+  const nothing = !key && inbox.data?.clusters.length === 0;
 
   return (
     <main className="page page--no-tabbar cab">
@@ -198,7 +206,8 @@ export function DispatcherInbox() {
           onRetry={() => void inbox.refetch()}
         />
       ) : (
-        <div className={cx('cab__grid', wide && 'cab__grid--wide')}>
+        // Входящих нет совсем — выбирать нечего: без заглушки справа, пустое состояние во всю ширину
+        <div className={cx('cab__grid', wide && !nothing && 'cab__grid--wide')}>
           {showList && <ClusterList inbox={inbox.data} selectedKey={key} />}
           {key ? (
             <ClusterPanel
@@ -208,7 +217,8 @@ export function DispatcherInbox() {
               onClose={() => navigate('/dispatcher')}
             />
           ) : (
-            wide && (
+            wide &&
+            !nothing && (
               <Card className="cab__placeholder">
                 <Empty
                   title="Выберите заявку"
