@@ -183,6 +183,44 @@ function AssignForm({ c, act }: { c: ClusterCard; act: Act }) {
   );
 }
 
+function ExecutorInfo({ c }: { c: ClusterCard }) {
+  if (!c.executor) return null;
+  return (
+    <div>
+      <div style={{ fontSize: 16, fontWeight: 600 }}>{c.executor.nameShort}</div>
+      {c.executor.plannedAt && (
+        <div className="muted num">Визит {fmtDateTime(c.executor.plannedAt)}</div>
+      )}
+    </div>
+  );
+}
+
+/** Назначен, но ещё не приступил: закрыть можно только начатую работу. */
+function StartForm({ c, act }: { c: ClusterCard; act: Act }) {
+  const who = c.executor?.nameShort ?? 'исполнитель';
+  return (
+    <Card className="card__section">
+      <div className="eyebrow">Исполнитель</div>
+      <ExecutorInfo c={c} />
+      <div className="banner banner--accent">
+        Ждём, когда {who} примет наряд в боте. Отметить выполненной можно, когда работа начата.
+      </div>
+      <Button
+        size="lg"
+        variant="secondary"
+        loading={act.isPending}
+        onClick={() => act.mutate({ action: 'start', body: { requestIds: c.requestIds } })}
+      >
+        Исполнитель приступил
+      </Button>
+      <div className="hint">
+        Если договорились по телефону или исполнитель не пользуется ботом. Жители получат
+        уведомление, что работа началась.
+      </div>
+    </Card>
+  );
+}
+
 function CompleteForm({ c, act }: { c: ClusterCard; act: Act }) {
   const upload = useUploadPhoto();
   const [photos, setPhotos] = useState<Array<{ key: string; url: string }>>([]);
@@ -201,14 +239,7 @@ function CompleteForm({ c, act }: { c: ClusterCard; act: Act }) {
   return (
     <Card className="card__section">
       <div className="eyebrow">Исполнитель</div>
-      {c.executor ? (
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{c.executor.nameShort}</div>
-          {c.executor.plannedAt && (
-            <div className="muted num">Визит {fmtDateTime(c.executor.plannedAt)}</div>
-          )}
-        </div>
-      ) : null}
+      <ExecutorInfo c={c} />
       <div className="stack-8">
         <div className="field__label">Фото после работ</div>
         <div className="photos">
@@ -292,6 +323,7 @@ function Actions({ c, act }: { c: ClusterCard; act: Act }) {
     case 'reopened':
       return <AssignForm c={c} act={act} />;
     case 'assigned':
+      return <StartForm c={c} act={act} />;
     case 'in_progress':
       return <CompleteForm c={c} act={act} />;
     case 'done':

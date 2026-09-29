@@ -15,10 +15,12 @@ const TRANSITIONS: Record<RequestStatus, Partial<Record<WorkflowEvent, RequestSt
   new: { accept: 'accepted', reject: 'rejected' },
   accepted: { assign: 'assigned', reject: 'rejected' },
   // decline — «не могу взять»: заявка возвращается диспетчеру, чтобы он назначил другого.
-  assigned: { start: 'in_progress', complete: 'done', assign: 'assigned', decline: 'accepted' },
+  // Выполнить можно только начатую работу: иначе заявку закрывают раньше, чем исполнитель
+  // вообще узнал о ней.
+  assigned: { start: 'in_progress', assign: 'assigned', decline: 'accepted' },
   in_progress: { complete: 'done', decline: 'accepted' },
   done: { confirm: 'confirmed', reopen: 'reopened' },
-  reopened: { assign: 'assigned', start: 'in_progress', complete: 'done' },
+  reopened: { assign: 'assigned', start: 'in_progress' },
   confirmed: {},
   rejected: {},
 };

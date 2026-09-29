@@ -24,7 +24,13 @@ describe('переходы', () => {
   it('житель может вернуть работу в работу', () => {
     const reopened = transition('done', 'reopen');
     expect(reopened).toBe('reopened');
-    expect(transition(reopened, 'complete')).toBe('done');
+    expect(transition(transition(reopened, 'start'), 'complete')).toBe('done');
+  });
+
+  it('выполнить можно только начатую работу', () => {
+    expect(canTransition('assigned', 'complete')).toBe(false);
+    expect(canTransition('reopened', 'complete')).toBe(false);
+    expect(canTransition('in_progress', 'complete')).toBe(true);
   });
 
   it('исполнитель может отказаться — заявка возвращается диспетчеру', () => {

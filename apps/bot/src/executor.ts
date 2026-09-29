@@ -90,6 +90,9 @@ const SILENT: Outcome = { popup: '', silent: true };
 const NOT_LINKED: Outcome = {
   popup: 'Вы не привязаны как исполнитель. Откройте ссылку-приглашение от диспетчера.',
 };
+const NOT_STARTED: Outcome = {
+  popup: 'Сначала нажмите «Принял» под нарядом — завершить можно только начатую работу.',
+};
 
 /** Сообщение бота, под которым сейчас стоят кнопки режима фото. */
 type Prompt = {
@@ -218,6 +221,7 @@ async function applyAction(
     if (!(err instanceof TransitionError)) throw err;
     // Заявка уже там, куда ведёт кнопка: это повтор того же действия — молчим
     if (ALREADY_THERE[key].includes(row.status)) return SILENT;
+    if (key === 'finish' && canTransition(row.status as RequestStatus, 'start')) return NOT_STARTED;
     return { popup: 'Заявка уже закрыта или изменена — ничего делать не нужно.' };
   }
 
@@ -363,6 +367,7 @@ async function enterPhotoMode(deps: Deps, requestId: string, maxUserId: number):
   if (row.executorId !== found.executor.id) return { popup: 'Эта заявка назначена не вам.' };
   if (!canTransition(row.status as RequestStatus, 'complete')) {
     if (ALREADY_THERE.finish.includes(row.status)) return SILENT;
+    if (canTransition(row.status as RequestStatus, 'start')) return NOT_STARTED;
     return { popup: 'Заявка уже закрыта или изменена — ничего делать не нужно.' };
   }
 

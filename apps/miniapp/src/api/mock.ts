@@ -331,7 +331,7 @@ function mockInbox(): DispatcherInbox {
 
 function bulk(
   ids: string[],
-  event: 'accept' | 'reject' | 'assign' | 'complete',
+  event: 'accept' | 'reject' | 'assign' | 'start' | 'complete',
   apply: (r: RequestDetail) => Partial<RequestDetail>,
   eventType: string,
   label: string,
@@ -672,6 +672,10 @@ export async function mockApi(path: string, init: RequestInit): Promise<unknown>
       'assigned',
       'Исполнитель назначен',
     );
+  }
+  if (p === '/api/dispatcher/start' && method === 'POST') {
+    const b = body as AcceptInput;
+    return bulk(b.requestIds, 'start', () => ({}), 'started', 'Исполнитель приступил');
   }
   if (p === '/api/dispatcher/complete' && method === 'POST') {
     const b = body as CompleteInput;

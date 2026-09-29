@@ -104,6 +104,11 @@ suite('кабинет диспетчера', () => {
     return created;
   };
 
+  const startWork = async (requestIds: string[]) => {
+    const res = await call('POST', '/api/dispatcher/start', DISPATCHER, { requestIds });
+    expect(res.json().updated, res.body).toBe(requestIds.length);
+  };
+
   const inbox = async () => {
     const res = await call('GET', '/api/dispatcher/inbox', DISPATCHER);
     expect(res.statusCode, res.body).toBe(200);
@@ -382,6 +387,7 @@ suite('кабинет диспетчера', () => {
       requestIds: [other.id],
       executorId: executors[0].id,
     });
+    await startWork([other.id]);
     await call('POST', '/api/dispatcher/complete', DISPATCHER, { requestIds: [other.id] });
 
     const res = await call('POST', '/api/dispatcher/assign', DISPATCHER, {
@@ -392,6 +398,31 @@ suite('кабинет диспетчера', () => {
     expect(res.json().skipped).toHaveLength(1);
   });
 
+  it('отметить выполненной можно только после того, как исполнитель приступил', async () => {
+    const created = await createAccepted(RESIDENT);
+    const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
+    await call('POST', '/api/dispatcher/assign', DISPATCHER, {
+      requestIds: [created.id],
+      executorId: executors[0].id,
+    });
+
+    const early = await call('POST', '/api/dispatcher/complete', DISPATCHER, {
+      requestIds: [created.id],
+    });
+    expect(early.json().updated).toBe(0);
+    expect((await inbox()).clusters[0]?.status).toBe('assigned');
+
+    await startWork([created.id]);
+    const rows = await db.execute(sql`select payload from outbox`);
+    expect(rows.rows.map((r) => (r.payload as { type: string }).type)).toContain('in_progress');
+
+    const done = await call('POST', '/api/dispatcher/complete', DISPATCHER, {
+      requestIds: [created.id],
+    });
+    expect(done.json().updated).toBe(1);
+    expect((await inbox()).clusters[0]?.status).toBe('done');
+  });
+
   it('выполненная работа уходит из кабинета после подтверждения жителем', async () => {
     const created = await createAccepted(RESIDENT);
     const executors = (await call('GET', '/api/dispatcher/executors', DISPATCHER)).json();
@@ -400,6 +431,7 @@ suite('кабинет диспетчера', () => {
       requestIds: [created.id],
       executorId: executors[0].id,
     });
+    await startWork([created.id]);
     await call('POST', '/api/dispatcher/complete', DISPATCHER, { requestIds: [created.id] });
 
     const still = await inbox();
@@ -419,6 +451,7 @@ suite('кабинет диспетчера', () => {
       requestIds: [created.id],
       executorId: executors[0].id,
     });
+    await startWork([created.id]);
     await call('POST', '/api/dispatcher/complete', DISPATCHER, { requestIds: [created.id] });
     await call('POST', `/api/requests/${created.id}/confirm`, RESIDENT, { accepted: false });
 
@@ -435,6 +468,8 @@ suite('кабинет диспетчера', () => {
       requestIds: [created.id],
       executorId: executors[0].id,
     });
+
+    await startWork([created.id]);
 
     // RESIDENT загрузил фото для своей будущей заявки — оно ещё ни к чему не привязано.
     const strangersPhoto = await uploadPhoto(RESIDENT);
@@ -463,6 +498,7 @@ suite('кабинет диспетчера', () => {
       executorId: executors[0].id,
     });
 
+    await startWork([created.id]);
     const ownPhoto = await uploadPhoto(DISPATCHER);
     await call('POST', '/api/dispatcher/complete', DISPATCHER, {
       requestIds: [created.id],
