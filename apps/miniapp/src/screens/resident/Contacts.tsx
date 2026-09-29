@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useHome, useMe } from '../../api/hooks';
 import type { Contact, Schedule } from '../../api/types';
-import { useBackButton } from '../../bridge/back';
 import { Button, Card, Chip, ErrorView, Loading, PageHeader, Stat } from '../../ui';
 
 const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -86,8 +85,6 @@ function ContactCard({ c, orgName }: { c: Contact; orgName?: string }) {
 }
 
 export function Contacts() {
-  const navigate = useNavigate();
-  useBackButton(() => navigate('/'));
   const me = useMe();
   const home = useHome(me.data?.house?.id);
   if (me.isPending) return <Loading />;

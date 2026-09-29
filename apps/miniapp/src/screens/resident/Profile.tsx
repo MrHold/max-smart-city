@@ -34,9 +34,16 @@ export function Profile() {
         ) : (
           <div className="muted">Дом не привязан</div>
         )}
-        <ButtonLink to="/bind" variant="secondary" size="sm">
-          {me.data.house ? 'Сменить дом' : 'Привязать дом'}
-        </ButtonLink>
+        <div className="row">
+          <ButtonLink to="/bind" variant="secondary" size="sm">
+            {me.data.house ? 'Сменить дом' : 'Привязать дом'}
+          </ButtonLink>
+          {me.data.house && (
+            <ButtonLink to="/house" variant="ghost" size="sm">
+              О доме
+            </ButtonLink>
+          )}
+        </div>
       </Card>
       <div className="stats">
         <Stat small value={roleLabel[me.data.role ?? 'none']} label="роль" />
