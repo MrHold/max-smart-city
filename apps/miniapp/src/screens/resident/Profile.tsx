@@ -3,16 +3,7 @@ import { useBecomeDispatcher, useMe } from '../../api/hooks';
 import { getPlatform, isMockBridge } from '../../bridge';
 import { isDemoMode } from '../../clock';
 import { DemoClockControl } from '../../clock/DemoClockControl';
-import {
-  Avatar,
-  Button,
-  ButtonLink,
-  Card,
-  ErrorView,
-  Loading,
-  PageHeader,
-  RowLink,
-} from '../../ui';
+import { Button, ButtonLink, Card, ErrorView, Loading, PageHeader, RowLink } from '../../ui';
 import { IconBuilding, IconHome, IconUser, IconUsers } from '../../ui/icons';
 
 const roleLabel: Record<string, string> = {
@@ -31,18 +22,11 @@ export function Profile() {
     return (
       <ErrorView error={me.error} message={me.error.message} onRetry={() => void me.refetch()} />
     );
-  const u = me.data.user;
-  const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ') || 'Житель';
   const aptNo = (me.data.apartmentLabel ?? '').replace(/^кв\.?\s*/i, '');
 
   return (
     <main className="page">
-      <PageHeader
-        hero
-        leading={<Avatar hero name={fullName} photoUrl={u.photoUrl} />}
-        title={fullName}
-        subtitle="Вход по аккаунту MAX, без регистрации"
-      />
+      <PageHeader hero title="Профиль" subtitle="Вход по аккаунту MAX, без регистрации" />
 
       <div className="stack-8">
         <h2 className="h2">Мой дом</h2>

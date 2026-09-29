@@ -2,7 +2,6 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import type { Provenance } from '../api/types';
-import { initials } from '../lib/format';
 import { IconArrowLeft, IconCheck, IconChevron, IconPhone, IconWarning } from './icons';
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
@@ -225,27 +224,6 @@ export function PageHeader({
       </div>
       {children}
     </header>
-  );
-}
-
-/** Аватар: фото из MAX, если есть, иначе инициалы */
-export function Avatar({
-  name,
-  photoUrl,
-  hero,
-}: {
-  name: string;
-  photoUrl?: string | null;
-  hero?: boolean;
-}) {
-  const cls = cx('avatar', hero && 'avatar--hero');
-  const size = hero ? 52 : 46;
-  return photoUrl ? (
-    <img className={cls} src={photoUrl} alt="" width={size} height={size} />
-  ) : (
-    <span className={cls} aria-hidden="true">
-      {initials(name)}
-    </span>
   );
 }
 
