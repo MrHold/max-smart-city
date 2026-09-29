@@ -23,6 +23,7 @@ import {
   Loading,
   Money,
   PageHeader,
+  PhoneAction,
   ProvenanceChip,
   Stat,
   Timeline,
@@ -310,14 +311,7 @@ export function RequestCard() {
             </div>
           </div>
           {/* Вторичная: главное действие на экране — позвать соседей */}
-          {r.executor.phone && (
-            <a
-              className="btn btn--secondary"
-              href={`tel:${r.executor.phone.replace(/[^\d+]/g, '')}`}
-            >
-              Позвонить
-            </a>
-          )}
+          {r.executor.phone && <PhoneAction phone={r.executor.phone} variant="secondary" />}
           <div className="hint">
             Служебный номер. Виден только вам и только пока заявка открыта.
           </div>

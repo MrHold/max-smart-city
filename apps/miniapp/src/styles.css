@@ -1643,3 +1643,12 @@ a.card:focus-visible,
     color: var(--brand-700);
   }
 }
+
+/* Трубка на компьютере — <button> вместо ссылки: убрать браузерные рамку и отступы.
+   :where не добавляет специфичности; обводки у call--outline в новом стиле нет, это мягкая заливка. */
+:where(button.call) {
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}

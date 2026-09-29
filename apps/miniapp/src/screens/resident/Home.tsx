@@ -5,10 +5,12 @@ import {
   ButtonLink,
   CallButton,
   Card,
+  canDial,
   ErrorView,
   formatRub,
   Loading,
   PageHeader,
+  PhoneAction,
   RowLink,
   SectionHeader,
 } from '../../ui';
@@ -151,15 +153,9 @@ export function Home() {
                   )}
                 </div>
               </div>
-              <div className="duo">
-                {dispatcher && (
-                  <a
-                    className="btn btn--primary"
-                    href={`tel:${dispatcher.phone.replace(/[^\d+]/g, '')}`}
-                  >
-                    Позвонить
-                  </a>
-                )}
+              {/* На компьютере вместо звонка номер с копированием: он длиннее, кнопки друг под другом */}
+              <div className={canDial() ? 'duo' : 'stack-8'}>
+                {dispatcher && <PhoneAction phone={dispatcher.phone} />}
                 <ButtonLink to="/contacts" variant="secondary">
                   Все контакты
                 </ButtonLink>

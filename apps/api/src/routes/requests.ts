@@ -21,6 +21,7 @@ import {
   requests,
 } from '@msc/db';
 import {
+  allowedScopes,
   type Clock,
   ConfirmInputSchema,
   dueAt as computeDueAt,
@@ -412,6 +413,8 @@ export const requestsRoutes =
 
       const region = regionOf(data, house.regionCode);
       const category = categoryOf(region, input.category);
+      if (!allowedScopes(category).includes(input.location.scope))
+        throw badRequest(`Для заявки «${category.title}» выберите другое место`);
 
       const startedAt = new Date(input.startedAt);
       if (startedAt.getTime() > now.getTime())
