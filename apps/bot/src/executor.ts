@@ -3,6 +3,7 @@ import {
   and,
   type Db,
   type DbOrTx,
+  desc,
   encryptUserId,
   enqueueNotification,
   eq,
@@ -355,7 +356,48 @@ async function enterPhotoMode(deps: Deps, requestId: string, maxUserId: number):
       `📷 Пришлите фото результата — одно или несколько (до ${MAX_PHOTOS_PER_REQUEST}). ` +
       'Когда закончите, нажмите «Завершить заявку».' +
       (already ? `\nУже приложено фото: ${already}.` : ''),
-    keyboard: photoModeKeyboard(row.id),
+    keyboard: photoModeKeyboard(row.id, already),
+  };
+}
+
+/**
+ * «Удалить последнее фото» в режиме фото: исполнитель ошибся снимком.
+ * Удаляется только запись у этой заявки — сам файл может быть общим с другими заявками наряда.
+ */
+async function removeLastPhoto(
+  deps: Deps,
+  requestId: string,
+  maxUserId: number,
+): Promise<{ text: string; keepSession: boolean }> {
+  const { db } = deps;
+  const found = await executorFor(deps, maxUserId);
+  if (!found) return { text: NOT_LINKED.popup, keepSession: false };
+  const [row] = await db.select().from(requests).where(eq(requests.id, requestId)).limit(1);
+  if (!row || row.executorId !== found.executor.id)
+    return { text: 'Эта заявка назначена не вам.', keepSession: false };
+  if (!canTransition(row.status as RequestStatus, 'complete'))
+    return { text: `Заявка №${row.number} уже закрыта — фото не изменить.`, keepSession: false };
+
+  const [last] = await db
+    .select({ id: photos.id })
+    .from(photos)
+    .where(
+      and(
+        eq(photos.requestId, row.id),
+        eq(photos.stage, 'after'),
+        eq(photos.uploadedBy, found.userId),
+      ),
+    )
+    .orderBy(desc(photos.at))
+    .limit(1);
+  if (last) await db.delete(photos).where(eq(photos.id, last.id));
+
+  const total = await afterPhotos(db, row.id);
+  return {
+    text: last
+      ? `🗑 Фото удалено. Осталось: ${total} из ${MAX_PHOTOS_PER_REQUEST}. Пришлите другое или нажмите «Завершить заявку».`
+      : 'Удалять нечего: фото к заявке ещё не приложены.',
+    keepSession: true,
   };
 }
 
@@ -519,7 +561,10 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
   // Ответ в режиме фото: новое сообщение с кнопками внизу чата, старое — убираем.
   // Сначала отправляем новое, потом убираем старое — кнопки не пропадают ни на миг.
   const showPrompt = async (session: PhotoSession, text: string, send: Send): Promise<void> => {
-    const sent = await send(text, { attachments: [photoModeKeyboard(session.requestId)] });
+    const count = await afterPhotos(deps.db, session.requestId);
+    const sent = await send(text, {
+      attachments: [photoModeKeyboard(session.requestId, count)],
+    });
     const old = session.prompt;
     const mid = sent?.body?.mid;
     session.prompt = mid ? { mid, text, removable: true } : undefined;
@@ -658,6 +703,31 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
         return;
       }
       if (result.text) await showPrompt(session, result.text, send);
+    });
+  });
+
+  // «Удалить последнее фото» в режиме фото: ответ — новым сообщением внизу, как на само фото
+  bot.action(/^exe:undo:(.+)$/, async (ctx) => {
+    const requestId = ctx.match?.[1];
+    const maxUserId = ctx.user?.user_id;
+    await ctx.answerOnCallback({}).catch(() => {});
+    if (!requestId || !maxUserId) return;
+    const send: Send = (t, extra) => ctx.reply(t, extra);
+
+    await oneByOne(maxUserId, async () => {
+      const session = activeSession(maxUserId);
+      if (session?.requestId !== requestId) {
+        await ctx.reply('Режим фото по этой заявке уже закрыт — нажмите «Выполнено» под нарядом.');
+        return;
+      }
+      const result = await removeLastPhoto(deps, requestId, maxUserId);
+      if (!result.keepSession) {
+        sessions.delete(maxUserId);
+        await retire(session.prompt);
+        await ctx.reply(result.text);
+        return;
+      }
+      await showPrompt(session, result.text, send);
     });
   });
 

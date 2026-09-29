@@ -21,9 +21,12 @@ export function ordersListKeyboard(items: Array<{ requestId: string; label: stri
  * Режим фото после «Выполнено»: завершить заявку или вернуться к наряду.
  * Стоит только под последним сообщением бота — со старых сообщений кнопки снимаются.
  */
-export function photoModeKeyboard(requestId: string) {
+export function photoModeKeyboard(requestId: string, photos = 0) {
   return Keyboard.inlineKeyboard([
     [Keyboard.button.callback('✅ Завершить заявку', `exe:finish:${requestId}`)],
+    ...(photos > 0
+      ? [[Keyboard.button.callback('🗑 Удалить последнее фото', `exe:undo:${requestId}`)]]
+      : []),
     [Keyboard.button.callback('↩️ Назад', `exe:back:${requestId}`)],
   ]);
 }
