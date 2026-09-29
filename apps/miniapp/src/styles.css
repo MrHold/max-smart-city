@@ -708,6 +708,9 @@ a.card:active {
 .status-line--muted {
   color: var(--ink-2);
 }
+.status-line--warn {
+  color: var(--warn-ink);
+}
 .dot {
   width: 8px;
   height: 8px;
@@ -821,6 +824,9 @@ a.card:active {
 }
 .stat--danger .stat__value {
   color: var(--danger-ink);
+}
+.stat--warn .stat__value {
+  color: var(--warn-ink);
 }
 .stats {
   display: grid;
@@ -1417,6 +1423,30 @@ a.card:active {
 .cab__grid--wide .cab__panel {
   position: sticky;
   top: 12px;
+}
+/* Заглушка справа — во всю высоту списка слева. Текст по центру, а при длинном списке
+   держится в пределах экрана и едет вместе с прокруткой. */
+.cab__grid--wide .cab__placeholder {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.cab__placeholder .center {
+  flex: 1;
+  min-height: 0;
+  max-height: calc(100dvh - 24px);
+  position: sticky;
+  top: 12px;
+}
+
+/* Исполнители: карточки в сетке, кнопка приглашения прижата к низу карточки */
+.exec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.exec-card__action {
+  margin-top: auto;
 }
 .cluster-row--on {
   background: var(--brand-50);

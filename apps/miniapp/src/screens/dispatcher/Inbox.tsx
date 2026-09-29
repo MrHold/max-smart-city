@@ -209,7 +209,7 @@ export function DispatcherInbox() {
             />
           ) : (
             wide && (
-              <Card className="cab__panel">
+              <Card className="cab__placeholder">
                 <Empty
                   title="Выберите заявку"
                   text="Заявки сгруппированы по проблеме: одна авария в доме — одна строка"

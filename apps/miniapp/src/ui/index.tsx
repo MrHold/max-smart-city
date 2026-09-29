@@ -401,7 +401,7 @@ export function Stat({
   value: ReactNode;
   label: string;
   small?: boolean;
-  tone?: 'danger';
+  tone?: 'danger' | 'warn';
 }) {
   return (
     <div className={cx('stat', tone && `stat--${tone}`)}>
