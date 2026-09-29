@@ -28,7 +28,12 @@ import {
   type WorkflowEvent,
 } from '@msc/domain';
 import { nowFor } from './clock';
-import { orderKeyboard, ordersListKeyboard, photoModeKeyboard } from './keyboards';
+import {
+  allOrdersKeyboard,
+  orderKeyboard,
+  ordersListKeyboard,
+  photoModeKeyboard,
+} from './keyboards';
 import {
   ACTIVE_STATUSES,
   type Attachment,
@@ -150,10 +155,15 @@ async function afterPhotos(db: DbOrTx, requestId: string): Promise<number> {
 }
 
 /** Привязка по приглашению: executors.user_id = этот пользователь MAX. */
-async function bindExecutor(deps: Deps, maxUserId: number, token: string): Promise<string> {
+async function bindExecutor(
+  deps: Deps,
+  maxUserId: number,
+  token: string,
+): Promise<{ text: string; bound: boolean }> {
+  const fail = (text: string) => ({ text, bound: false });
   const executorId = verifyInvite(token, deps.hashSecret);
   if (!executorId)
-    return 'Ссылка-приглашение недействительна. Попросите диспетчера прислать новую.';
+    return fail('Ссылка-приглашение недействительна. Попросите диспетчера прислать новую.');
 
   const [executor] = await deps.db
     .select()
@@ -161,13 +171,20 @@ async function bindExecutor(deps: Deps, maxUserId: number, token: string): Promi
     .where(eq(executors.id, executorId))
     .limit(1);
   if (!executor)
-    return 'Исполнитель по этой ссылке не найден. Попросите диспетчера прислать новую.';
+    return fail('Исполнитель по этой ссылке не найден. Попросите диспетчера прислать новую.');
 
   const userId = await userIdFor(deps, maxUserId, true);
-  if (!userId) return 'Не получилось сохранить привязку, попробуйте открыть ссылку ещё раз.';
+  if (!userId) return fail('Не получилось сохранить привязку, попробуйте открыть ссылку ещё раз.');
 
   await deps.db.update(executors).set({ userId }).where(eq(executors.id, executorId));
-  return `Готово, ${executor.nameShort}! Наряды по заявкам будут приходить сюда. Отмечайте ход работы кнопками под нарядом.`;
+  return {
+    text:
+      `Готово, ${executor.nameShort}! Наряды по заявкам будут приходить сюда. ` +
+      'Отмечайте ход работы кнопками под нарядом.\n\n' +
+      '🛠 Все ваши активные наряды — по кнопке «Мои наряды»: она есть под каждым нарядом ' +
+      'и в меню бота (/start). Или командой /orders.',
+    bound: true,
+  };
 }
 
 /**
@@ -327,11 +344,13 @@ async function applyAction(
     return {
       popup: '',
       reply: `${card}\n\n✅ Наряд выполнен${n ? `, приложено фото: ${n}` : ' без фото'}. ${who}`,
+      keyboard: allOrdersKeyboard(),
     };
   }
   return {
     popup: '',
     reply: `${card}\n\nВы сняты с наряда. Диспетчер назначит другого исполнителя.`,
+    keyboard: allOrdersKeyboard(),
   };
 }
 
@@ -585,7 +604,8 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     const payload = ctx.startPayload;
     const maxUserId = ctx.user?.user_id;
     if (typeof payload !== 'string' || !payload.startsWith('inv_') || !maxUserId) return next();
-    await ctx.reply(await bindExecutor(deps, maxUserId, payload));
+    const { text, bound } = await bindExecutor(deps, maxUserId, payload);
+    await ctx.reply(text, { attachments: bound ? [allOrdersKeyboard()] : [] });
   });
 
   // Запасной путь: прислал «/start inv_…» или просто код приглашения текстом
@@ -593,7 +613,8 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     const token = ctx.match?.[1];
     const maxUserId = ctx.message?.sender?.user_id;
     if (!token || !maxUserId) return;
-    await ctx.reply(await bindExecutor(deps, maxUserId, token));
+    const { text, bound } = await bindExecutor(deps, maxUserId, token);
+    await ctx.reply(text, { attachments: bound ? [allOrdersKeyboard()] : [] });
   });
 
   // «Мои наряды»: активные наряды списком — чат не единственное место, где их искать
