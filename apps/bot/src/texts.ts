@@ -18,7 +18,7 @@ export function welcomeText(name?: string | null): string {
 
 /** Дописывается к приветствию, если пользователь привязан как исполнитель. */
 export const executorNote = (nameShort: string): string =>
-  `\n\n🛠 Вы подключены как исполнитель ${nameShort}: наряды приходят сюда, отмечайте ход работы кнопками под нарядом.`;
+  `\n\n🛠 Вы подключены как исполнитель ${nameShort}: наряды приходят сюда, отмечайте ход работы кнопками под нарядом. Все активные наряды — по кнопке «Мои наряды» или команде /orders.`;
 
 export const contactsText =
   'Контакты УК, диспетчера и аварийной службы — в «Мой дом»: там по графику видно, кому звонить прямо сейчас.';
@@ -30,4 +30,5 @@ export const fallbackText =
 export const botCommands = [
   { name: 'start', description: 'Главное меню' },
   { name: 'help', description: 'Что умеет бот' },
+  { name: 'orders', description: 'Мои наряды (для исполнителей)' },
 ];

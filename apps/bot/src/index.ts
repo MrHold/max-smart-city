@@ -61,28 +61,44 @@ if (executorDeps) {
   );
 }
 
-/** Приветствие с описанием; исполнителю — ещё строка про наряды. */
+const executorMenu = Keyboard.inlineKeyboard([
+  [Keyboard.button.callback('🛠 Мои наряды', 'exe:orders')],
+  [Keyboard.button.openApp('Мой дом', botUsername, me.user_id)],
+  [Keyboard.button.callback('Контакты УК', 'home:contacts')],
+]);
+
+/** Приветствие с описанием; исполнителю — ещё строка про наряды и кнопка их списка. */
 async function greeting(name: string | null | undefined, maxUserId: number | undefined) {
   let text = welcomeText(name);
   if (executorDeps && maxUserId) {
     const executorName = await executorNameFor(executorDeps, maxUserId).catch(() => null);
-    if (executorName) text += executorNote(executorName);
+    if (executorName) {
+      text += executorNote(executorName);
+      return { text, keyboard: executorMenu };
+    }
   }
-  return text;
+  return { text, keyboard: menu };
 }
 
-bot.on('bot_started', async (ctx) =>
-  ctx.reply(await greeting(ctx.user?.first_name, ctx.user?.user_id), { attachments: [menu] }),
+const greet = async (
+  reply: (text: string, extra: { attachments: Array<typeof menu> }) => Promise<unknown>,
+  name: string | null | undefined,
+  maxUserId: number | undefined,
+) => {
+  const { text, keyboard } = await greeting(name, maxUserId);
+  await reply(text, { attachments: [keyboard] });
+};
+
+bot.on('bot_started', (ctx) =>
+  greet((t, e) => ctx.reply(t, e), ctx.user?.first_name, ctx.user?.user_id),
 );
 
-bot.command(['start', 'help'], async (ctx) =>
-  ctx.reply(await greeting(ctx.message?.sender?.first_name, ctx.message?.sender?.user_id), {
-    attachments: [menu],
-  }),
+bot.command(['start', 'help'], (ctx) =>
+  greet((t, e) => ctx.reply(t, e), ctx.message?.sender?.first_name, ctx.message?.sender?.user_id),
 );
 
-bot.action('home:help', async (ctx) =>
-  ctx.reply(await greeting(ctx.user?.first_name, ctx.user?.user_id), { attachments: [menu] }),
+bot.action('home:help', (ctx) =>
+  greet((t, e) => ctx.reply(t, e), ctx.user?.first_name, ctx.user?.user_id),
 );
 
 bot.action('home:contacts', (ctx) =>
@@ -106,7 +122,14 @@ await bot.api.setMyCommands(botCommands).catch((err) => {
 
 // Почтальон: рассылает уведомления и наряды, которые API кладёт в outbox
 if (db && encKey) {
-  startOutbox({ bot, db, encKey, botUsername, botId: me.user_id });
+  startOutbox({
+    bot,
+    db,
+    encKey,
+    botUsername,
+    botId: me.user_id,
+    photosDir: process.env.PHOTOS_DIR ?? null,
+  });
   console.log('Уведомления из outbox включены');
 } else {
   console.warn('Уведомления выключены: не заданы DATABASE_URL или USER_ID_ENC_KEY');

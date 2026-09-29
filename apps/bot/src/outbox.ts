@@ -1,6 +1,6 @@
 import { type Bot, Keyboard } from '@maxhub/max-bot-api';
-import { and, asc, type Db, decryptUserId, eq, outbox, sql, users } from '@msc/db';
-import { orderKeyboard } from './keyboards';
+import { and, asc, type Db, decryptUserId, eq, outbox, requests, sql, users } from '@msc/db';
+import { ACTIVE_STATUSES, orderHint, orderView, sendOrder, stageOf } from './order';
 import { formatDate, orderCard } from './order-card';
 
 const TICK_MS = 5_000; // как часто проверять очередь
@@ -43,7 +43,7 @@ export function notificationText(p: Payload): string {
       return `Работа по заявке ${no} выполнена${n ? `, исполнитель приложил фото: ${n}` : ''}. Проверьте результат и подтвердите в приложении.`;
     }
     case 'order':
-      return `${orderCard(p)}\n\nОтметьте кнопками, когда приступите и когда закончите.`;
+      return `${orderCard(p)}\n\n${orderHint('assigned')}`;
     case 'auto_closed':
       return `Заявка ${no} закрыта автоматически: вы не подтвердили результат в течение ${p.afterDays ?? 3} суток. Если проблема осталась, подайте новую заявку.`;
     case 'in_progress':
@@ -67,8 +67,29 @@ export function startOutbox(deps: {
   encKey: Buffer;
   botUsername: string;
   botId: number;
+  /** Папка с фото жителей: они уходят вместе с нарядом. */
+  photosDir: string | null;
 }): () => void {
-  const { bot, db, encKey, botUsername, botId } = deps;
+  const { bot, db, encKey, botUsername, botId, photosDir } = deps;
+
+  /**
+   * Наряд собирается из базы в момент отправки: так в нём все заявки проблемы и фото жителей.
+   * false — наряд уже неактуален (исполнителя сняли, заявку закрыли), слать его не нужно.
+   */
+  async function deliverOrder(maxUserId: number, requestId: string): Promise<boolean> {
+    const [row] = await db.select().from(requests).where(eq(requests.id, requestId)).limit(1);
+    if (!row?.executorId || !ACTIVE_STATUSES.includes(row.status)) return false;
+    const view = await orderView(db, row);
+    await sendOrder(
+      (text, extra) => bot.api.sendMessageToUser(maxUserId, text, extra),
+      bot,
+      photosDir,
+      view,
+      row.id,
+      stageOf(row.status),
+    );
+    return true;
+  }
   let busy = false;
 
   async function deliver(row: Row): Promise<void> {
@@ -87,22 +108,32 @@ export function startOutbox(deps: {
       const payload = (row.payload ?? {}) as Payload;
       maxUserId = decryptUserId(row.userIdEnc, encKey);
 
-      // Наряду — кнопки исполнителя; остальным — открыть заявку в мини-приложении
-      const keyboard =
-        payload.type === 'order' && payload.requestId
-          ? orderKeyboard(payload.requestId, 'assigned')
-          : Keyboard.inlineKeyboard([
-              [
-                payload.requestId
-                  ? Keyboard.button.openApp(
-                      'Открыть заявку',
-                      botUsername,
-                      botId,
-                      `req_${payload.requestId}`,
-                    )
-                  : Keyboard.button.openApp('Мой дом', botUsername, botId),
-              ],
-            ]);
+      if (payload.type === 'order' && payload.requestId) {
+        const sent = await deliverOrder(maxUserId, payload.requestId);
+        await db
+          .update(outbox)
+          .set(
+            sent
+              ? { status: 'sent', sentAt: new Date(), lastError: null }
+              : { status: 'failed', lastError: 'наряд уже неактуален' },
+          )
+          .where(eq(outbox.id, row.id));
+        return;
+      }
+
+      // Жителю и диспетчеру — открыть заявку в мини-приложении
+      const keyboard = Keyboard.inlineKeyboard([
+        [
+          payload.requestId
+            ? Keyboard.button.openApp(
+                'Открыть заявку',
+                botUsername,
+                botId,
+                `req_${payload.requestId}`,
+              )
+            : Keyboard.button.openApp('Мой дом', botUsername, botId),
+        ],
+      ]);
 
       await bot.api.sendMessageToUser(maxUserId, notificationText(payload), {
         attachments: [keyboard],

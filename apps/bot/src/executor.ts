@@ -27,8 +27,17 @@ import {
   type WorkflowEvent,
 } from '@msc/domain';
 import { nowFor } from './clock';
-import { orderKeyboard, photoModeKeyboard } from './keyboards';
-import { orderCard } from './order-card';
+import { orderKeyboard, ordersListKeyboard, photoModeKeyboard } from './keyboards';
+import {
+  ACTIVE_STATUSES,
+  type Attachment,
+  activeOrders,
+  imagesOf,
+  orderView,
+  type RequestRow,
+  sendOrder,
+  stageOf,
+} from './order';
 import { downloadImage, savePhoto } from './photo';
 
 export type Deps = {
@@ -60,12 +69,10 @@ const PHOTO_SESSION_MS = 6 * 60 * 60_000; // режим фото закрыва�
 const MAX_PHOTOS_PER_MESSAGE = 5;
 const MAX_PHOTOS_PER_REQUEST = 10;
 
-type Kb = ReturnType<typeof orderKeyboard>;
-type RequestRow = typeof requests.$inferSelect;
 type Outcome = {
   popup: string;
   reply?: string;
-  keyboard?: Kb;
+  keyboard?: Attachment;
   /** Повтор уже выполненного действия: ничего не отвечаем, только снимаем «крутилку» с кнопки. */
   silent?: boolean;
   /** Номер заявки — нужен режиму фото для подсказок. */
@@ -86,6 +93,8 @@ type Prompt = {
    * false — бывший наряд: там адрес и время, его не удаляем, а только снимаем кнопки.
    */
   removable: boolean;
+  /** Фото жителей в бывшем наряде: при снятии кнопок их нужно передать заново. */
+  images?: Attachment[];
 };
 
 /** Режим фото: исполнитель прикладывает фото к этой заявке, пока не нажмёт «Завершить» или «Назад». */
@@ -94,7 +103,7 @@ type PhotoSession = { requestId: string; number: string; until: number; prompt?:
 /** Как отправить ответ в чат; возвращает отправленное сообщение (нужен его mid). */
 type Send = (
   text: string,
-  extra: { attachments: Kb[] },
+  extra: { attachments: Attachment[] },
 ) => Promise<{ body?: { mid?: string } } | undefined>;
 
 /** users.id по MAX user_id. create — завести пользователя, если его ещё нет (как при входе в API). */
@@ -138,32 +147,6 @@ async function afterPhotos(db: DbOrTx, requestId: string): Promise<number> {
   return row?.n ?? 0;
 }
 
-/**
- * Карточка наряда по данным из базы: адрес — из дома, плановое время — из последнего
- * события «назначен» (отдельной колонки у заявки нет; при переназначении берём новое время).
- */
-async function orderCardFor(db: Db, row: RequestRow): Promise<string> {
-  const [house] = await db
-    .select({ address: houses.address })
-    .from(houses)
-    .where(eq(houses.id, row.houseId))
-    .limit(1);
-  const [assigned] = await db
-    .select({ payload: requestEvents.payload })
-    .from(requestEvents)
-    .where(and(eq(requestEvents.requestId, row.id), eq(requestEvents.type, 'assigned')))
-    .orderBy(sql`${requestEvents.at} desc`)
-    .limit(1);
-  const plannedAt = (assigned?.payload as { plannedAt?: unknown } | null | undefined)?.plannedAt;
-  return orderCard({
-    number: row.number,
-    address: house?.address,
-    category: row.category,
-    description: row.description,
-    plannedAt,
-  });
-}
-
 /** Привязка по приглашению: executors.user_id = этот пользователь MAX. */
 async function bindExecutor(deps: Deps, maxUserId: number, token: string): Promise<string> {
   const executorId = verifyInvite(token, deps.hashSecret);
@@ -185,7 +168,10 @@ async function bindExecutor(deps: Deps, maxUserId: number, token: string): Promi
   return `Готово, ${executor.nameShort}! Наряды по заявкам будут приходить сюда. Отмечайте ход работы кнопками под нарядом.`;
 }
 
-/** «Принял» / «Завершить заявку» / «Не могу» — смена статуса одной транзакцией. */
+/**
+ * «Принял» / «Завершить заявку» / «Не могу» — одной транзакцией для всех заявок наряда:
+ * одна проблема в доме, один наряд, и каждый автор получает своё уведомление.
+ */
 async function applyAction(
   deps: Deps,
   key: ActionKey,
@@ -216,6 +202,8 @@ async function applyAction(
     return { popup: 'Заявка уже закрыта или изменена — ничего делать не нужно.' };
   }
 
+  // Карточку собираем до смены статуса: после «Не могу» заявки уже не будут связаны с исполнителем
+  const view = await orderView(db, row);
   const now = await nowFor(db, deps.demoMode);
   const applied = await db.transaction(async (tx) => {
     // Повтор того же нажатия (или повторная доставка апдейта от MAX) — ничего не делаем
@@ -226,43 +214,71 @@ async function applyAction(
       .returning({ key: processedUpdates.updateKey });
     if (fresh.length === 0) return null;
 
-    const updated = await tx
-      .update(requests)
-      .set({
-        status: next,
-        updatedAt: now,
-        ...(key === 'finish' ? { endedAt: now } : {}),
-        ...(key === 'decline' ? { executorId: null } : {}),
-      })
-      // статус в условии: если диспетчер успел поменять заявку, ничего не перезаписываем
-      .where(and(eq(requests.id, row.id), eq(requests.status, row.status)))
-      .returning({ id: requests.id });
-    if (updated.length === 0) return null;
+    const changed: RequestRow[] = [];
+    for (const r of view.group) {
+      const updated = await tx
+        .update(requests)
+        .set({
+          status: next,
+          updatedAt: now,
+          ...(key === 'finish' ? { endedAt: now } : {}),
+          ...(key === 'decline' ? { executorId: null } : {}),
+        })
+        // статус в условии: если диспетчер успел поменять заявку, ничего не перезаписываем
+        .where(and(eq(requests.id, r.id), eq(requests.status, r.status)))
+        .returning({ id: requests.id });
+      if (updated.length > 0) changed.push(r);
+    }
+    if (changed.length === 0) return null;
 
+    // Фото результата исполнитель прикладывает к наряду, то есть к одной заявке, —
+    // копируем их остальным, чтобы результат увидел каждый житель.
     const photoCount = key === 'finish' ? await afterPhotos(tx, row.id) : 0;
+    if (photoCount > 0) {
+      const shots = await tx
+        .select()
+        .from(photos)
+        .where(and(eq(photos.requestId, row.id), eq(photos.stage, 'after')));
+      for (const r of changed) {
+        if (r.id === row.id) continue;
+        await tx.insert(photos).values(
+          shots.map((s) => ({
+            requestId: r.id,
+            storageKey: s.storageKey,
+            sha256: s.sha256,
+            stage: 'after' as const,
+            uploadedBy: s.uploadedBy,
+            at: s.at,
+          })),
+        );
+      }
+    }
 
-    await tx.insert(requestEvents).values({
-      requestId: row.id,
-      type: ACTIONS[key].eventType,
-      actorUserId: userId,
-      payload: {
-        by: 'executor',
-        executorId: executor.id,
-        nameShort: executor.nameShort,
-        ...(key === 'finish' ? { photos: photoCount } : {}),
-      },
-      at: now,
-    });
+    for (const r of changed) {
+      await tx.insert(requestEvents).values({
+        requestId: r.id,
+        type: ACTIONS[key].eventType,
+        actorUserId: userId,
+        payload: {
+          by: 'executor',
+          executorId: executor.id,
+          nameShort: executor.nameShort,
+          ...(key === 'finish' ? { photos: photoCount } : {}),
+        },
+        at: now,
+      });
+      const own = { requestId: r.id, number: r.number, nameShort: executor.nameShort };
+      if (key === 'start')
+        await enqueueNotification(tx, r.authorUserId, { type: 'in_progress', ...own });
+      if (key === 'finish')
+        await enqueueNotification(tx, r.authorUserId, {
+          type: 'completed',
+          ...own,
+          photos: photoCount,
+        });
+    }
 
     const base = { requestId: row.id, number: row.number, nameShort: executor.nameShort };
-    if (key === 'start')
-      await enqueueNotification(tx, row.authorUserId, { type: 'in_progress', ...base });
-    if (key === 'finish')
-      await enqueueNotification(tx, row.authorUserId, {
-        type: 'completed',
-        ...base,
-        photos: photoCount,
-      });
     if (key === 'decline') {
       // Отказ видит не житель, а диспетчеры дома: им назначать другого
       const [house] = await tx
@@ -292,7 +308,7 @@ async function applyAction(
   if (!applied) return SILENT;
 
   // Сообщение с кнопкой заменится этим текстом — карточку наряда (адрес, время) сохраняем
-  const card = await orderCardFor(db, row);
+  const card = view.text;
   if (key === 'start') {
     return {
       popup: '',
@@ -302,14 +318,18 @@ async function applyAction(
   }
   if (key === 'finish') {
     const n = applied.photoCount;
+    const who =
+      view.group.length > 1
+        ? 'Жители получат уведомление и подтвердят работу.'
+        : 'Житель получит уведомление и подтвердит работу.';
     return {
       popup: '',
-      reply: `${card}\n\n✅ Заявка завершена${n ? `, приложено фото: ${n}` : ' без фото'}. Житель получит уведомление и подтвердит работу.`,
+      reply: `${card}\n\n✅ Наряд выполнен${n ? `, приложено фото: ${n}` : ' без фото'}. ${who}`,
     };
   }
   return {
     popup: '',
-    reply: `${card}\n\nВы сняты с заявки. Диспетчер назначит другого исполнителя.`,
+    reply: `${card}\n\nВы сняты с наряда. Диспетчер назначит другого исполнителя.`,
   };
 }
 
@@ -326,7 +346,7 @@ async function enterPhotoMode(deps: Deps, requestId: string, maxUserId: number):
   }
 
   const already = await afterPhotos(deps.db, row.id);
-  const card = await orderCardFor(deps.db, row);
+  const card = (await orderView(deps.db, row)).text;
   return {
     popup: '',
     number: row.number,
@@ -346,11 +366,12 @@ async function backToOrder(deps: Deps, requestId: string, maxUserId: number): Pr
   const [row] = await deps.db.select().from(requests).where(eq(requests.id, requestId)).limit(1);
   if (!row || row.executorId !== found.executor.id) return SILENT;
   if (!canTransition(row.status as RequestStatus, 'complete')) return SILENT; // уже завершена
-  const card = await orderCardFor(deps.db, row);
+  const card = (await orderView(deps.db, row)).text;
+  const stage = stageOf(row.status);
   return {
     popup: '',
-    reply: `${card}\n\nЗаявка остаётся в работе. Когда закончите — нажмите «Выполнено».`,
-    keyboard: orderKeyboard(row.id, row.status === 'assigned' ? 'assigned' : 'in_progress'),
+    reply: `${card}\n\n${stage === 'assigned' ? 'Наряд ждёт, когда вы его примете.' : 'Заявка остаётся в работе. Когда закончите — нажмите «Выполнено».'}`,
+    keyboard: orderKeyboard(row.id, stage),
   };
 }
 
@@ -482,7 +503,11 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     if (!prompt || prompt.mid === exceptMid) return;
     try {
       if (prompt.removable) await bot.api.deleteMessage(prompt.mid);
-      else await bot.api.editMessage(prompt.mid, { text: prompt.text, attachments: [] });
+      else
+        await bot.api.editMessage(prompt.mid, {
+          text: prompt.text,
+          attachments: prompt.images ?? [],
+        });
     } catch (err) {
       console.warn(
         'Режим фото: не удалось убрать старые кнопки —',
@@ -515,6 +540,62 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     const maxUserId = ctx.message?.sender?.user_id;
     if (!token || !maxUserId) return;
     await ctx.reply(await bindExecutor(deps, maxUserId, token));
+  });
+
+  // «Мои наряды»: активные наряды списком — чат не единственное место, где их искать
+  const showOrders = async (maxUserId: number | undefined, reply: Send): Promise<void> => {
+    const found = maxUserId ? await executorFor(deps, maxUserId) : null;
+    if (!found) {
+      await reply('Список нарядов — для исполнителей УК. Ваши заявки — в «Мой дом».', {
+        attachments: [],
+      });
+      return;
+    }
+    const items = await activeOrders(deps.db, found.executor.id);
+    if (items.length === 0) {
+      await reply('Активных нарядов нет. Новый придёт сюда, как только диспетчер его назначит.', {
+        attachments: [],
+      });
+      return;
+    }
+    await reply(`Ваши наряды: ${items.length}. Нажмите, чтобы открыть.`, {
+      attachments: [ordersListKeyboard(items)],
+    });
+  };
+
+  bot.command('orders', (ctx) =>
+    showOrders(ctx.message?.sender?.user_id, (t, extra) => ctx.reply(t, extra)),
+  );
+  bot.action('exe:orders', async (ctx) => {
+    await ctx.answerOnCallback({}).catch(() => {});
+    await showOrders(ctx.user?.user_id, (t, extra) => ctx.reply(t, extra));
+  });
+
+  // Открыть наряд из списка: новое сообщение с карточкой, фото и кнопками текущего шага
+  bot.action(/^exe:show:(.+)$/, async (ctx) => {
+    const requestId = ctx.match?.[1];
+    const maxUserId = ctx.user?.user_id;
+    await ctx.answerOnCallback({}).catch(() => {});
+    if (!requestId || !maxUserId) return;
+    const found = await executorFor(deps, maxUserId);
+    if (!found) {
+      await ctx.reply(NOT_LINKED.popup);
+      return;
+    }
+    const [row] = await deps.db.select().from(requests).where(eq(requests.id, requestId)).limit(1);
+    if (!row || row.executorId !== found.executor.id || !ACTIVE_STATUSES.includes(row.status)) {
+      await ctx.reply('Этот наряд уже закрыт или передан другому исполнителю.');
+      return;
+    }
+    const view = await orderView(deps.db, row);
+    await sendOrder(
+      (t, extra) => ctx.reply(t, extra),
+      bot,
+      deps.photosDir,
+      view,
+      row.id,
+      stageOf(row.status),
+    );
   });
 
   // Сообщения исполнителя в режиме фото: фото — к заявке, текст — подсказка
@@ -589,6 +670,8 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
     if (!action || !requestId || !maxUserId || !callbackId) return;
     // Сообщение, под которым нажали кнопку: его заменит ответ, убирать его не нужно
     const pressedMid = ctx.message?.body?.mid;
+    // Фото жителей из наряда переживают смену кнопок: MAX заменяет вложения целиком
+    const images = imagesOf(ctx.message);
 
     await oneByOne(maxUserId, async () => {
       let outcome: Outcome;
@@ -609,7 +692,7 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
             number: outcome.number,
             until: Date.now() + PHOTO_SESSION_MS,
             prompt: pressedMid
-              ? { mid: pressedMid, text: outcome.reply, removable: false }
+              ? { mid: pressedMid, text: outcome.reply, removable: false, images }
               : undefined,
           });
         }
@@ -635,7 +718,7 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
 
       if (outcome.reply) {
         // Успех: сообщение с кнопкой заменяется новым состоянием
-        const attachments = outcome.keyboard ? [outcome.keyboard] : [];
+        const attachments = outcome.keyboard ? [...images, outcome.keyboard] : images;
         await ctx
           .answerOnCallback({ message: { text: outcome.reply, attachments } })
           .catch(() => ctx.reply(outcome.reply ?? '', { attachments }));
