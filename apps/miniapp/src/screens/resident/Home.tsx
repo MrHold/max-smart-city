@@ -1,41 +1,38 @@
 import { Link, Navigate } from 'react-router-dom';
-import { useHome, useMe, useMyRequests } from '../../api/hooks';
-import type { Contact } from '../../api/types';
+import { useHome, useMe, useMyRequests, useRequest } from '../../api/hooks';
 import { fmtDate } from '../../lib/format';
-import { closedStatuses, statusLabel, statusTone } from '../../lib/request';
-import { ButtonLink, CallButton, Card, Chip, ErrorView, Loading, SectionHeader } from '../../ui';
-import { IconChevron, IconPlus } from '../../ui/icons';
+import { closedStatuses } from '../../lib/request';
+import {
+  Avatar,
+  ButtonLink,
+  CallButton,
+  Card,
+  Chip,
+  ErrorView,
+  formatRub,
+  Loading,
+  PageHeader,
+  QuickTile,
+  SectionHeader,
+} from '../../ui';
+import {
+  IconBuilding,
+  IconChevron,
+  IconList,
+  IconPlus,
+  IconUser,
+  IconUsers,
+  IconWarning,
+} from '../../ui/icons';
+import { RequestRow } from './RequestRow';
 
-const contactTitle: Record<Contact['kind'], string> = {
-  dispatcher: 'Диспетчер УК',
-  office: 'Офис управляющей компании',
-  emergency: 'Аварийная служба',
-};
-
-function ContactRow({ c }: { c: Contact }) {
-  const emergency = c.kind === 'emergency';
-  return (
-    <div className="list-item">
-      <div className="grow stack">
-        <div className="list-item__title">{contactTitle[c.kind]}</div>
-        {emergency ? (
-          <div className="status-line status-line--danger">Круглосуточно · протечка, нет света</div>
-        ) : c.open ? (
-          <div
-            className={`status-line ${c.open.isOpen ? 'status-line--ok' : 'status-line--muted'}`}
-          >
-            <span className="dot" />
-            {c.open.isOpen ? `На связи до ${c.open.until ?? ''}` : 'Сейчас закрыто'}
-          </div>
-        ) : null}
-      </div>
-      <CallButton
-        phone={c.phone}
-        tone={emergency ? 'danger' : c.kind === 'office' ? 'outline' : 'primary'}
-        label={`Позвонить: ${contactTitle[c.kind]}`}
-      />
-    </div>
-  );
+function greeting(d = new Date()): string {
+  const h = d.getHours();
+  if (h < 5) return 'Доброй ночи';
+  if (h < 12) return 'Доброе утро';
+  if (h < 18) return 'Добрый день';
+  if (h < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
 }
 
 export function Home() {
@@ -43,6 +40,10 @@ export function Home() {
   const houseId = me.data?.house?.id;
   const home = useHome(houseId);
   const requests = useMyRequests();
+  const active = (requests.data ?? []).filter((r) => !closedStatuses.includes(r.status));
+  const first = active[0];
+  // Сумма перерасчёта есть только в карточке заявки — берём её по первой открытой
+  const detail = useRequest(first?.id, Boolean(first));
 
   if (me.isPending) return <Loading />;
   if (me.isError)
@@ -51,52 +52,167 @@ export function Home() {
     );
   if (!me.data.house) return <Navigate to="/bind" replace />;
 
-  const active = (requests.data ?? []).filter((r) => !closedStatuses.includes(r.status));
-  const first = active[0];
+  const name = me.data.user.firstName || 'сосед';
+  const aptNo = (me.data.apartmentLabel ?? '').replace(/^кв\.?\s*/i, '');
+  const overdue = active.filter((r) => r.overdue).length;
+  const nearestDue = active
+    .map((r) => r.dueAt)
+    .sort()
+    .at(0);
+  const kopecks = detail.data?.liability?.apartmentKopecks ?? 0;
+  const dispatcher = home.data?.contacts.find((c) => c.kind === 'dispatcher');
+  const emergency = home.data?.contacts.find((c) => c.kind === 'emergency');
+  const org = home.data?.org;
 
   return (
     <main className="page">
-      <div className="stack">
-        <div className="eyebrow">Ваш дом</div>
-        <h1 className="h1 h1--lg">{me.data.house.address}</h1>
-        <div className="muted">
-          {me.data.apartmentLabel}
-          {home.data?.org && ` · ${home.data.org.name}`}
-        </div>
+      <PageHeader
+        hero
+        leading={<Avatar hero name={name} photoUrl={me.data.user.photoUrl} />}
+        eyebrow={greeting()}
+        title={name}
+      />
+
+      <Card className="card__section">
+        <Link to="/house" className="flat">
+          <div className="grow stack">
+            <div className="flat__title">{aptNo ? `Квартира ${aptNo}` : 'Моя квартира'}</div>
+            <div className="muted">{me.data.house.address}</div>
+          </div>
+          <IconChevron size={20} className="chev" />
+        </Link>
+        <nav className="qt-row" aria-label="Быстрые действия">
+          <QuickTile primary to="/requests/new" icon={<IconPlus />} label="Сообщить о проблеме" />
+          <QuickTile to="/requests" icon={<IconList />} label="Мои заявки" />
+          {me.data.role === 'dispatcher' && (
+            <QuickTile to="/dispatcher" icon={<IconUsers />} label="Кабинет УК" tone="warn" />
+          )}
+          <QuickTile to="/house" icon={<IconBuilding />} label="Паспорт дома" tone="ok" />
+          <QuickTile to="/profile/data" icon={<IconUser />} label="Мои данные" tone="neutral" />
+        </nav>
+      </Card>
+
+      <div className="duo">
+        <Link to="/requests" className="card card--pad status-card">
+          <span className="status-card__title">Заявки</span>
+          {requests.isPending ? (
+            <Chip>…</Chip>
+          ) : overdue > 0 ? (
+            <Chip tone="danger" solid>
+              {overdue} с просрочкой
+            </Chip>
+          ) : active.length > 0 ? (
+            <Chip tone="accent" solid>
+              {active.length} в работе
+            </Chip>
+          ) : (
+            <Chip>нет открытых</Chip>
+          )}
+          <span className="status-card__cap">
+            {overdue > 0
+              ? 'Срок ответа УК вышел'
+              : nearestDue
+                ? `Ближайший срок ${fmtDate(nearestDue)}`
+                : 'Сообщите, если что-то не так'}
+          </span>
+        </Link>
+        <Link
+          to={first ? `/requests/${first.id}` : '/requests'}
+          className="card card--pad status-card"
+        >
+          <span className="status-card__title">Перерасчёт</span>
+          {kopecks > 0 ? (
+            <Chip tone="ok" solid>
+              {formatRub(kopecks)}
+            </Chip>
+          ) : (
+            <Chip>пока нет</Chip>
+          )}
+          <span className="status-card__cap">
+            {kopecks > 0 && first
+              ? `Вам положено по заявке № ${first.number}`
+              : 'Начисляется, если нарушение дольше нормы'}
+          </span>
+        </Link>
       </div>
 
-      {me.data.role === 'dispatcher' && (
-        <Link to="/dispatcher" className="banner banner--accent">
-          <div className="grow" style={{ fontSize: 14 }}>
-            <strong>Кабинет диспетчера</strong> — входящие по домам организации
+      {home.data?.announcement && (
+        <div className="notice">
+          <div className="grow stack">
+            <div className="notice__title">{home.data.announcement.title}</div>
+            <div className="notice__text">{home.data.announcement.text}</div>
           </div>
-          <IconChevron size={18} />
-        </Link>
+          <span className="icon-sq icon-sq--warn" aria-hidden="true">
+            <IconWarning size={20} />
+          </span>
+        </div>
       )}
 
-      <div className="stack-8">
-        <SectionHeader title="Кому звонить сейчас" action="График" to="/contacts" />
-        {home.isPending ? (
-          <Loading />
-        ) : home.isError ? (
-          <ErrorView
-            error={home.error}
-            message={home.error.message}
-            onRetry={() => void home.refetch()}
-          />
-        ) : (
-          <Card pad={false} className="list">
-            {home.data.contacts.map((c) => (
-              <ContactRow key={c.kind} c={c} />
-            ))}
-          </Card>
-        )}
-      </div>
-
-      <ButtonLink to="/requests/new" size="lg" stretched>
-        <IconPlus />
-        Сообщить о проблеме
-      </ButtonLink>
+      {home.isPending ? (
+        <Loading compact />
+      ) : home.isError ? (
+        <ErrorView
+          error={home.error}
+          message={home.error.message}
+          onRetry={() => void home.refetch()}
+        />
+      ) : (
+        <>
+          {org && (
+            <Card className="card__section">
+              <div className="row" style={{ gap: 12 }}>
+                <span className="icon-sq" aria-hidden="true">
+                  <IconBuilding size={20} />
+                </span>
+                <div className="grow stack">
+                  <div className="list-item__title">{org.name}</div>
+                  {dispatcher?.open ? (
+                    <div
+                      className={`status-line ${dispatcher.open.isOpen ? 'status-line--ok' : 'status-line--muted'}`}
+                    >
+                      <span className="dot" />
+                      {dispatcher.open.isOpen
+                        ? `Диспетчер на связи до ${dispatcher.open.until ?? ''}`
+                        : 'Диспетчер сейчас не отвечает'}
+                    </div>
+                  ) : (
+                    <div className="muted">Управляющая организация</div>
+                  )}
+                </div>
+              </div>
+              <div className="duo">
+                {dispatcher && (
+                  <a
+                    className="btn btn--primary"
+                    href={`tel:${dispatcher.phone.replace(/[^\d+]/g, '')}`}
+                  >
+                    Позвонить
+                  </a>
+                )}
+                <ButtonLink to="/contacts" variant="secondary">
+                  Все контакты
+                </ButtonLink>
+              </div>
+            </Card>
+          )}
+          {emergency && (
+            <div className="sos">
+              <span className="icon-sq icon-sq--danger" aria-hidden="true">
+                <IconWarning size={20} />
+              </span>
+              <div className="grow stack">
+                <div className="list-item__title">Аварийная служба</div>
+                <div className="sos__cap">Круглосуточно: протечка, нет света, запах газа</div>
+              </div>
+              <CallButton
+                phone={emergency.phone}
+                tone="danger"
+                label="Позвонить в аварийную службу"
+              />
+            </div>
+          )}
+        </>
+      )}
 
       <div className="stack-8">
         <SectionHeader
@@ -104,34 +220,18 @@ export function Home() {
           action={active.length ? `Все · ${active.length}` : 'Все'}
           to="/requests"
         />
-        {first ? (
-          <Card to={`/requests/${first.id}`}>
-            <div className="stack-8">
-              <div className="row row--between">
-                <div className="list-item__title">{first.title}</div>
-                <Chip tone={first.overdue ? 'danger' : statusTone[first.status]}>
-                  {first.overdue ? 'Срок вышел' : statusLabel[first.status]}
-                </Chip>
-              </div>
-              <div className="muted num">
-                № {first.number} · срок до {fmtDate(first.dueAt)}
-                {first.joinersCount > 0 && ` · ${first.joinersCount + 1} кв.`}
-              </div>
-            </div>
-          </Card>
+        {requests.isPending ? (
+          <Loading compact />
+        ) : active.length > 0 ? (
+          active.slice(0, 2).map((r) => <RequestRow key={r.id} r={r} />)
         ) : (
           <Card>
-            <div className="muted">Открытых заявок нет</div>
+            <div className="muted">
+              Открытых заявок нет. Если что-то сломалось, нажмите «Сообщить о проблеме».
+            </div>
           </Card>
         )}
       </div>
-
-      {home.data?.announcement && (
-        <div className="banner banner--warn">
-          <div className="eyebrow">{home.data.announcement.title}</div>
-          <div>{home.data.announcement.text}</div>
-        </div>
-      )}
 
       {home.data?.house.dataKind === 'model' && (
         <div className="hint">

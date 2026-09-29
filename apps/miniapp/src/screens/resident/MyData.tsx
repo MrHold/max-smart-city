@@ -4,15 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import { useDeleteMe, useMyData } from '../../api/hooks';
 import { useBackButton } from '../../bridge/back';
 import { fmtDate } from '../../lib/format';
-import { Button, Card, ErrorView, Loading, PageHeader } from '../../ui';
+import { Button, Card, ErrorView, Loading, PageHeader, Spot } from '../../ui';
+import { IconCheck } from '../../ui/icons';
 
 function Done({ result }: { result: DeleteMeResult }) {
   const navigate = useNavigate();
   const d = result.deleted;
   return (
     <main className="page">
+      <Spot tone="ok" icon={<IconCheck size={36} />} />
       <PageHeader
-        eyebrow="Готово"
+        center
         title="Данные удалены"
         subtitle="Приложение больше ничего о вас не знает"
       />
@@ -29,7 +31,7 @@ function Done({ result }: { result: DeleteMeResult }) {
           ещё нужны.
         </div>
       </Card>
-      <Button stretched onClick={() => navigate('/bind', { replace: true })}>
+      <Button size="lg" stretched onClick={() => navigate('/bind', { replace: true })}>
         Начать заново
       </Button>
     </main>
@@ -61,9 +63,10 @@ export function MyData() {
   return (
     <main className="page">
       <PageHeader
+        backTo="/profile"
         eyebrow="Персональные данные"
         title="Что о вас хранится"
-        subtitle={`Идентификатор ${d.userId.slice(0, 8)}… · с ${fmtDate(d.createdAt)}`}
+        subtitle={`Идентификатор ${d.userId.slice(0, 8)}… с ${fmtDate(d.createdAt)}`}
       />
 
       <Card pad={false} className="list">
@@ -94,7 +97,7 @@ export function MyData() {
       </div>
 
       {confirming ? (
-        <Card className="card__section card--accent">
+        <Card className="card__section">
           <div style={{ fontWeight: 600 }}>Удалить всё безвозвратно?</div>
           <div className="row">
             <Button
@@ -109,10 +112,19 @@ export function MyData() {
               Отмена
             </Button>
           </div>
-          {del.isError && <div className="field__error">{del.error.message}</div>}
+          {del.isError && (
+            <div className="field__error" role="alert">
+              {del.error.message}
+            </div>
+          )}
         </Card>
       ) : (
-        <Button variant="secondary" stretched onClick={() => setConfirming(true)}>
+        <Button
+          variant="ghost"
+          className="btn--danger-text"
+          stretched
+          onClick={() => setConfirming(true)}
+        >
           Удалить всё
         </Button>
       )}

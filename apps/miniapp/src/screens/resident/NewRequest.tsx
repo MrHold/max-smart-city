@@ -5,8 +5,8 @@ import type { Category, LocationScope, MeasurementPlace, NewRequestInput } from 
 import { ensureWebApp } from '../../bridge';
 import { useBackButton } from '../../bridge/back';
 import { demoClock } from '../../clock';
-import { parseTemp, toLocalInputValue } from '../../lib/format';
-import { Button, Card, cx, ErrorView, Field, Loading, StepProgress, Tile } from '../../ui';
+import { fmtDateTime, parseTemp, toLocalInputValue } from '../../lib/format';
+import { Button, Card, ErrorView, Field, Loading, StepProgress, Tile } from '../../ui';
 import {
   IconArrowLeft,
   IconBroom,
@@ -131,6 +131,7 @@ export function NewRequest() {
   const validateStep2 = (): string | null => {
     if ((scope === 'entrance' || scope === 'floor') && !entrance) return 'Укажите номер подъезда';
     if (scope === 'floor' && !floor) return 'Укажите этаж';
+    if (Number.isNaN(new Date(startedAt).getTime())) return 'Укажите, когда началось';
     if (new Date(startedAt).getTime() > demoClock.now().getTime())
       return 'Начало не может быть в будущем';
     if (needsTemp && tempValue === null) return 'Нужен замер температуры';
@@ -248,7 +249,9 @@ export function NewRequest() {
                 <Field label="Подъезд" htmlFor="entrance">
                   <input
                     id="entrance"
+                    name="entrance"
                     className="input"
+                    autoComplete="off"
                     inputMode="numeric"
                     value={entrance}
                     onChange={(e) => setEntrance(e.target.value.replace(/\D/g, '').slice(0, 3))}
@@ -258,7 +261,9 @@ export function NewRequest() {
                   <Field label="Этаж" htmlFor="floor">
                     <input
                       id="floor"
+                      name="floor"
                       className="input"
+                      autoComplete="off"
                       inputMode="numeric"
                       value={floor}
                       onChange={(e) => setFloor(e.target.value.replace(/\D/g, '').slice(0, 3))}
@@ -271,7 +276,9 @@ export function NewRequest() {
               <Field label="Уточнение" htmlFor="note" hint="Например: у второго подъезда">
                 <input
                   id="note"
+                  name="note"
                   className="input"
+                  autoComplete="off"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   maxLength={200}
@@ -283,6 +290,7 @@ export function NewRequest() {
           <Field label="Когда началось" htmlFor="startedAt">
             <input
               id="startedAt"
+              name="startedAt"
               className="input"
               type="datetime-local"
               value={startedAt}
@@ -303,16 +311,18 @@ export function NewRequest() {
                 <div className="input--unit">
                   <input
                     id="temp"
+                    name="temperature"
                     className="input"
                     inputMode="decimal"
-                    placeholder="15"
+                    autoComplete="off"
+                    placeholder="Например, 15…"
                     value={temp}
                     onChange={(e) => setTemp(e.target.value)}
                   />
                   <span>°C</span>
                 </div>
               </Field>
-              <div className="tiles">
+              <div className="tiles tiles--2">
                 {places
                   .filter((p) =>
                     category.service === 'heating' ? p.value !== 'tap' : p.value === 'tap',
@@ -353,7 +363,7 @@ export function NewRequest() {
             <div className="photos">
               {photos.map((p) => (
                 <div className="thumb" key={p.key}>
-                  <img src={p.preview} alt="Фото проблемы" />
+                  <img src={p.preview} alt="Фото проблемы" width={76} height={76} />
                 </div>
               ))}
               {photos.length < 5 && (
@@ -374,11 +384,12 @@ export function NewRequest() {
           <Field label="Описание" htmlFor="description">
             <textarea
               id="description"
+              name="description"
               className="textarea"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={1000}
-              placeholder="Что видите, с какого момента"
+              placeholder="Что видите, с какого момента…"
             />
           </Field>
         </>
@@ -398,7 +409,7 @@ export function NewRequest() {
               .filter(Boolean)
               .join(', ')}
           />
-          <Row label="С какого момента" value={new Date(startedAt).toLocaleString('ru-RU')} />
+          <Row label="С какого момента" value={fmtDateTime(new Date(startedAt).toISOString())} />
           {needsTemp && (
             <Row
               label="Замер"
@@ -415,7 +426,11 @@ export function NewRequest() {
         </Card>
       )}
 
-      {error && <div className="field__error">{error}</div>}
+      {error && (
+        <div className="field__error" role="alert">
+          {error}
+        </div>
+      )}
 
       <div className="cta">
         <Button variant="secondary" onClick={goBack} style={{ flexGrow: 0 }}>
@@ -450,11 +465,9 @@ export function NewRequest() {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className={cx('row', 'row--baseline')} style={{ fontSize: 14, gap: 12 }}>
-      <span className="muted" style={{ minWidth: 110 }}>
-        {label}
-      </span>
-      <span className="grow">{value}</span>
+    <div className="kv">
+      <span className="kv__label">{label}</span>
+      <span className="kv__value">{value}</span>
     </div>
   );
 }

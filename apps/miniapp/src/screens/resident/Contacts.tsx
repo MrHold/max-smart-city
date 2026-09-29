@@ -64,13 +64,10 @@ function EmergencyRow({ c }: { c: Contact }) {
   return (
     <div className="banner banner--danger">
       <div className="grow stack">
-        <div className="row row--between">
-          <span className="list-item__title">Аварийная служба</span>
-          <span className="contact__note">Круглосуточно</span>
-        </div>
+        <span className="list-item__title">Аварийная служба</span>
         <div className="num contact__phone">{c.phone}</div>
         <div className="contact__note">
-          Протечка, прорыв трубы, нет света во всём доме. Запах газа — сразу 104.
+          Круглосуточно. Протечка, прорыв трубы, нет света во всём доме. Запах газа — сразу 104.
         </div>
       </div>
       <CallButton phone={c.phone} tone="danger" label="Позвонить в аварийную службу" />
@@ -110,7 +107,12 @@ export function Contacts() {
 
   return (
     <main className="page">
-      <PageHeader title="Контакты" subtitle={`Сейчас ${nowText} · местное время дома`} />
+      <PageHeader
+        hero
+        backTo="/"
+        title="Контакты"
+        subtitle={`Сейчас ${nowText}, местное время дома`}
+      />
       {regular.length > 0 && (
         <Card pad={false} className="list">
           {regular.map((c) => (

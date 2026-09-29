@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useHome, useMe } from '../../api/hooks';
-import { Card, ErrorView, Loading, PageHeader, ProvenanceChip } from '../../ui';
+import { Card, ErrorView, Loading, PageHeader, ProvenanceChip, RowLink } from '../../ui';
+import { IconBuilding, IconPhone } from '../../ui/icons';
 
 export function House() {
   const me = useMe();
@@ -24,12 +25,17 @@ export function House() {
   return (
     <main className="page">
       <PageHeader
+        hero
+        eyebrow="Мой дом"
         title={h.house.address}
         subtitle={h.org ? `Управляет ${h.org.name}` : 'Управляющая организация не указана'}
       />
       <Card className="card__section">
-        <div className="row row--between">
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Паспорт дома</div>
+        <div className="row" style={{ gap: 12 }}>
+          <span className="icon-sq" aria-hidden="true">
+            <IconBuilding size={20} />
+          </span>
+          <div className="grow list-item__title">Паспорт дома</div>
           <ProvenanceChip value={h.house.dataKind} />
         </div>
         <div className="muted">
@@ -38,11 +44,23 @@ export function House() {
         </div>
       </Card>
       {h.org?.address && (
-        <Card className="card__section">
-          <div className="eyebrow">Офис УК</div>
-          <div>{h.org.address}</div>
-        </Card>
+        <div className="stack-8">
+          <h2 className="h2">Офис УК</h2>
+          <Card className="card__section">
+            <div className="list-item__title">{h.org.name}</div>
+            <div className="muted">{h.org.address}</div>
+          </Card>
+        </div>
       )}
+      <Card pad={false} className="list">
+        <RowLink
+          to="/contacts"
+          icon={<IconPhone size={20} />}
+          tone="ok"
+          title="Контакты и график"
+          sub="Диспетчер, офис УК, аварийная служба"
+        />
+      </Card>
     </main>
   );
 }

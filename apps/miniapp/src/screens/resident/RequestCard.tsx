@@ -22,6 +22,7 @@ import {
   formatRub,
   Loading,
   Money,
+  PageHeader,
   ProvenanceChip,
   Stat,
   Timeline,
@@ -83,7 +84,7 @@ function PhotoStrip({ photos }: { photos: Photo[] }) {
             onClick={() => setOpen(p.url)}
             aria-label="Открыть фото"
           >
-            <img src={p.url} alt="" loading="lazy" />
+            <img src={p.url} alt="" width={76} height={76} loading="lazy" />
           </button>
         ))}
       </div>
@@ -191,29 +192,33 @@ function LiabilityBlock({ l, closed }: { l: Liability; closed: boolean }) {
             : 'Сумма появится, как только нарушение продлится дольше допустимого.'}
         </div>
       )}
-      <details>
-        <summary className="muted" style={{ cursor: 'pointer' }}>
-          Как посчитано
-        </summary>
-        <div className="steps-list" style={{ marginTop: 8 }}>
+      <details className="calc">
+        <summary>Как посчитано</summary>
+        <div className="sum">
           {l.steps.map((s) => (
-            <div className="step-row" key={s.label}>
-              <div className="grow">
-                <div>{s.label}</div>
+            <div className="sum-row" key={s.label}>
+              <span className="sum-row__label">
+                <span>{s.label}</span>
                 {s.ref && (
-                  <div className="hint">
+                  <span className="hint">
                     {s.ref.act}, {s.ref.point}
-                  </div>
+                  </span>
                 )}
-              </div>
-              <ProvenanceChip value={s.provenance} />
-              <span className="step-row__value">
+                <ProvenanceChip value={s.provenance} />
+              </span>
+              <span className="sum-row__value">
                 {s.value.toLocaleString('ru-RU')} {s.unit}
               </span>
             </div>
           ))}
+          {counting && (
+            <div className="sum-row sum-row--total">
+              <span className="sum-row__label">Итого вам</span>
+              <span className="sum-row__value">{formatRub(l.apartmentKopecks)}</span>
+            </div>
+          )}
         </div>
-        <div className="hint" style={{ marginTop: 8 }}>
+        <div className="hint">
           Правила версии {l.rulesVersion}. Сумма по дому — оценка: площади соседей неизвестны.
         </div>
       </details>
@@ -244,13 +249,14 @@ export function RequestCard() {
 
   return (
     <main className="page">
-      <div className="stack" style={{ gap: 6 }}>
-        <div className="muted num">
-          Заявка № {r.number} · от {fmtDateTime(r.createdAt)}
-        </div>
-        <h1 className="h1">{r.title}</h1>
+      <PageHeader
+        hero
+        backTo="/requests"
+        eyebrow={`Заявка № ${r.number} от ${fmtDateTime(r.createdAt)}`}
+        title={r.title}
+      >
         <div className="row wrap">
-          <Chip tone={overdue ? 'danger' : statusTone[r.status]}>
+          <Chip tone={overdue ? 'danger' : statusTone[r.status]} solid={overdue}>
             {overdue ? 'Срок вышел' : statusLabel[r.status]}
           </Chip>
           {r.kind !== 'emergency' && (
@@ -258,9 +264,9 @@ export function RequestCard() {
               <IconUsers size={14} /> {total} {plural(total, 'квартира', 'квартиры', 'квартир')}
             </Chip>
           )}
-          <Deadline r={r} />
         </div>
-      </div>
+        <Deadline r={r} />
+      </PageHeader>
 
       {r.status === 'rejected' && (
         <div className="banner banner--danger">
@@ -369,8 +375,9 @@ export function RequestCard() {
           <div className="eyebrow">Документы</div>
           {r.claim.available && (
             <Button
-              variant="secondary"
-              loading={doc.isPending && doc.variables?.filename.startsWith('claim')}
+              size="lg"
+              className="btn--split"
+              loading={doc.isPending && doc.variables?.filename.startsWith('zayavlenie')}
               onClick={() =>
                 doc.mutate({
                   requestId: r.id,
@@ -380,7 +387,10 @@ export function RequestCard() {
                 })
               }
             >
-              Заявление на перерасчёт (PDF)
+              {r.liability && r.liability.apartmentKopecks > 0 && (
+                <span className="btn__value">{formatRub(r.liability.apartmentKopecks)}</span>
+              )}
+              Скачать заявление
             </Button>
           )}
           {r.gji.available ? (
@@ -403,7 +413,11 @@ export function RequestCard() {
               {fmtDateTime(r.gji.afterAt)}: раньше его вернут как преждевременное.
             </div>
           ) : null}
-          {doc.isError && <div className="field__error">{doc.error.message}</div>}
+          {doc.isError && (
+            <div className="field__error" role="alert">
+              {doc.error.message}
+            </div>
+          )}
           <div className="hint">
             Документы собираются из данных заявки: период нарушения, замеры, расчёт со ссылками на
             нормы и список присоединившихся квартир.
