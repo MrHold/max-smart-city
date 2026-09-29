@@ -171,21 +171,13 @@ curl -X POST http://localhost:3001/api/demo/clock \
 Формат каждого запроса и ответа описан схемами zod в `packages/domain/src/contracts` — это и есть
 контракт между фронтом и бэкендом, по нему же проверяются ответы в тестах.
 
-| Метод | Путь | Что |
-|---|---|---|
-| GET | `/api/health` | проверка живости, текущее время сервера |
-| GET | `/api/houses?q=` | поиск дома по адресу, от 3 символов |
-| GET | `/api/houses/:id/home` | контакты УК со статусом «открыто до…» по местному времени дома, объявление |
-| GET | `/api/houses/:id/categories` | категории заявок для региона дома |
-| GET | `/api/me` | кто вошёл: профиль MAX, роль, дом, согласие; первый вызов создаёт пользователя |
-| POST | `/api/me/house` | привязка к дому и квартире `{ houseId, apartmentLabel }` |
-| POST | `/api/photos` | загрузка фото (`multipart`, поле `file`, до 5 МБ, JPEG/PNG/WebP/HEIC) |
-| GET | `/api/photos/*` | отдача загруженного фото |
-| GET | `/api/me/data` | что о пользователе хранится: состав, количество записей и зачем каждая нужна |
-| DELETE | `/api/me` | удалить привязку к дому, согласия, присоединения и очередь уведомлений |
-| GET | `/api/requests/:id/documents/claim.pdf` | заявление о перерасчёте, когда посчитана сумма |
-| GET | `/api/requests/:id/documents/gji.pdf` | обращение в ГЖИ, когда истёк срок ответа УК (`gji.available`) |
-| POST | `/api/requests/:id/documents/{claim,gji}/link` | свежая подписанная ссылка на PDF: `{ url, expiresAt }` |
+Все маршруты, параметры и ответы — в [`openapi.yaml`](../openapi.yaml), он собирается из тех же схем:
+
+```bash
+pnpm --filter @msc/api openapi                                              # пересобрать после правки контрактов или маршрутов
+API_URL=http://localhost:3001 pnpm --filter @msc/api check-openapi          # сверить локальный API с описанием
+API_URL=http://localhost:3001 CHECK_WRITES=1 pnpm --filter @msc/api check-openapi   # то же с созданием заявок
+```
 
 Маршруты с входом ждут заголовок `X-Init-Data` с подписанной initData из MAX; без него — `401`.
 Ошибки всегда в одном формате: `{ "error": { "code": "not_found", "message": "Дом не найден" } }`.
