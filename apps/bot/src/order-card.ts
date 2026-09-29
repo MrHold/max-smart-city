@@ -27,6 +27,7 @@ const CATEGORY_TITLES: Record<string, string> = {
   entrance_door: 'Дверь, домофон',
   elevator: 'Лифт',
   entrance_cleaning: 'Не убран подъезд',
+  garbage_chute: 'Мусоропровод',
 };
 
 export const categoryTitle = (code: unknown): string | null =>
