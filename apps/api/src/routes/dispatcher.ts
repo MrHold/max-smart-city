@@ -496,6 +496,40 @@ export const dispatcherRoutes =
       );
     });
 
+    /**
+     * «Исполнитель приступил» — за исполнителя, который не в боте или договорился по телефону.
+     * Без этого шага отметить работу выполненной нельзя: закрыть можно только начатое.
+     */
+    app.post('/api/dispatcher/start', { preHandler: authenticate }, async (req) => {
+      const parsed = AcceptInputSchema.safeParse(req.body);
+      if (!parsed.success) throw badRequest('Укажите заявки');
+      const { userId } = getAuth(req);
+      const ctx = await requireDispatcher(userId);
+      const staff = await db
+        .select({ id: executorsTable.id, nameShort: executorsTable.nameShort })
+        .from(executorsTable)
+        .where(eq(executorsTable.orgId, ctx.orgId));
+      const nameOf = new Map(staff.map((e) => [e.id, e.nameShort]));
+      return bulk(
+        userId,
+        parsed.data.requestIds,
+        'start',
+        () => ({}),
+        'started',
+        (row) => ({
+          by: 'dispatcher',
+          executorId: row.executorId,
+          nameShort: row.executorId ? (nameOf.get(row.executorId) ?? null) : null,
+        }),
+        (row) => ({
+          type: 'in_progress',
+          requestId: row.id,
+          number: row.number,
+          nameShort: row.executorId ? (nameOf.get(row.executorId) ?? '') : '',
+        }),
+      );
+    });
+
     app.post('/api/dispatcher/assign', { preHandler: authenticate }, async (req) => {
       const parsed = AssignInputSchema.safeParse(req.body);
       if (!parsed.success) throw badRequest('Укажите заявки и исполнителя');

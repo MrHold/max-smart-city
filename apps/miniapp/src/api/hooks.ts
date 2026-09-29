@@ -238,6 +238,7 @@ export type DispatcherAction =
   | { action: 'accept'; body: AcceptInput }
   | { action: 'reject'; body: RejectInput }
   | { action: 'assign'; body: AssignInput }
+  | { action: 'start'; body: AcceptInput }
   | { action: 'complete'; body: CompleteInput };
 
 /** Массовое действие над кластером: после него меняются и входящие, и карточки жителей. */
