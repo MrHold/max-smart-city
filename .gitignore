@@ -21,3 +21,9 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+# фото локального запуска API (PHOTOS_DIR=./data/photos относительно apps/api)
+apps/*/data/photos/
+/data/photos/
+
+# локальные настройки ассистентов
+.claude/
