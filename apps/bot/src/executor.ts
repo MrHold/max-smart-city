@@ -67,7 +67,8 @@ const ALREADY_THERE: Record<ActionKey, string[]> = {
 };
 
 const PHOTO_SESSION_MS = 6 * 60 * 60_000; // режим фото закрывается сам, если про него забыли
-const MAX_PHOTOS_PER_MESSAGE = 5;
+// Ограничение одно — на заявку. MAX делит большой альбом на несколько сообщений,
+// и лимит «на сообщение» незаметно срезал фото из середины альбома.
 const MAX_PHOTOS_PER_REQUEST = 10;
 
 type Outcome = {
@@ -454,14 +455,16 @@ async function savePhotos(
   const before = await afterPhotos(db, row.id);
   if (before >= MAX_PHOTOS_PER_REQUEST) {
     return {
-      text: `📷 Фото: ${before} из ${MAX_PHOTOS_PER_REQUEST} — больше не нужно. Нажмите «Завершить заявку».`,
+      text: `📷 Фото: ${before} из ${MAX_PHOTOS_PER_REQUEST} — это максимум, ${urls.length === 1 ? 'новое фото не сохранено' : 'новые фото не сохранены'}. Нажмите «Завершить заявку» или удалите лишнее.`,
       keepSession: true,
     };
   }
 
+  const taken = urls.slice(0, MAX_PHOTOS_PER_REQUEST - before);
+  const dropped = urls.length - taken.length;
   let added = 0;
   try {
-    for (const url of urls.slice(0, MAX_PHOTOS_PER_REQUEST - before)) {
+    for (const url of taken) {
       const { buffer, mime } = await downloadImage(url);
       const { key, sha256 } = await savePhoto(photosDir, buffer, mime);
       const [same] = await db
@@ -496,6 +499,12 @@ async function savePhotos(
   }
 
   const total = await afterPhotos(db, row.id);
+  if (dropped > 0) {
+    return {
+      text: `📷 Фото: ${total} из ${MAX_PHOTOS_PER_REQUEST} — это максимум, ещё ${dropped} не ${dropped === 1 ? 'сохранено' : 'сохранены'}. Нажмите «Завершить заявку» или удалите лишнее.`,
+      keepSession: true,
+    };
+  }
   return {
     text: added
       ? `📷 Фото: ${total} из ${MAX_PHOTOS_PER_REQUEST}. Пришлите ещё или нажмите «Завершить заявку».`
@@ -691,7 +700,7 @@ export function registerExecutor(bot: Bot, deps: Deps): void {
         deps.photosDir,
         maxUserId,
         mid,
-        urls.slice(0, MAX_PHOTOS_PER_MESSAGE),
+        urls,
         session.requestId,
       );
 

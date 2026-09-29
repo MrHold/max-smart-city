@@ -3,6 +3,7 @@ export * from './cluster';
 export * from './contracts';
 export * from './deadlines';
 export * from './liability';
+export * from './location';
 export * from './quality';
 export * from './regions';
 export * from './schedule';
