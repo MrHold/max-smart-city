@@ -305,7 +305,7 @@ export function RequestCard() {
         </ButtonLink>
       )}
 
-      {r.liability && <LiabilityBlock l={r.liability} closed={closed} />}
+      {r.liability && <LiabilityBlock l={r.liability} closed={closed || r.endedAt !== null} />}
       {r.isAuthor && r.kind !== 'emergency' && !closed && <ShareBlock r={r} />}
 
       {r.executor && (
