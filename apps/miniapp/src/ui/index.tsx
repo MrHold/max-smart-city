@@ -2,7 +2,8 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import type { Provenance } from '../api/types';
-import { IconCheck, IconPhone } from './icons';
+import { initials } from '../lib/format';
+import { IconArrowLeft, IconCheck, IconChevron, IconPhone, IconWarning } from './icons';
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ');
@@ -91,13 +92,20 @@ export type ChipTone = 'accent' | 'ok' | 'warn' | 'danger' | 'neutral';
 export function Chip({
   tone = 'neutral',
   xs,
+  solid,
   children,
 }: {
   tone?: ChipTone;
   xs?: boolean;
+  /** Залитая плашка с белым текстом — для главного статуса: срок вышел, сумма к возврату */
+  solid?: boolean;
   children: ReactNode;
 }) {
-  return <span className={cx('chip', `chip--${tone}`, xs && 'chip--xs')}>{children}</span>;
+  return (
+    <span className={cx('chip', `chip--${tone}`, xs && 'chip--xs', solid && 'chip--solid')}>
+      {children}
+    </span>
+  );
 }
 
 const provenanceLabel: Record<Provenance, { text: string; tone: ChipTone }> = {
@@ -157,23 +165,159 @@ export function SectionHeader({
   );
 }
 
+/**
+ * Шапка экрана. `hero` — синяя шапка во всю ширину колонки со скруглённым краем листа снизу:
+ * для разделов и карточки заявки. Без неё — обычный заголовок на фоне.
+ */
 export function PageHeader({
   eyebrow,
   title,
   subtitle,
   large,
+  hero,
+  center,
+  backTo,
+  onBack,
+  leading,
+  actions,
+  children,
 }: {
   eyebrow?: string;
   title: string;
   subtitle?: ReactNode;
   large?: boolean;
+  hero?: boolean;
+  center?: boolean;
+  backTo?: string;
+  onBack?: () => void;
+  leading?: ReactNode;
+  actions?: ReactNode;
+  children?: ReactNode;
+}) {
+  const back = backTo ? (
+    <Link to={backTo} className="head__back" aria-label="Назад">
+      <IconArrowLeft size={20} />
+    </Link>
+  ) : onBack ? (
+    <button type="button" className="head__back" onClick={onBack} aria-label="Назад">
+      <IconArrowLeft size={20} />
+    </button>
+  ) : null;
+  return (
+    <header className={cx('head', hero && 'head--hero', center && 'head--center')}>
+      {(back || actions) && (
+        <div className="head__bar">
+          {back ?? <span />}
+          {actions && <div className="head__actions">{actions}</div>}
+        </div>
+      )}
+      <div className="head__main">
+        {leading}
+        <div className="head__titles">
+          {eyebrow && <div className="head__eyebrow">{eyebrow}</div>}
+          <h1 className={cx('h1', large && 'h1--lg')}>{title}</h1>
+          {subtitle && <div className="head__sub">{subtitle}</div>}
+        </div>
+      </div>
+      {children}
+    </header>
+  );
+}
+
+/** Аватар: фото из MAX, если есть, иначе инициалы */
+export function Avatar({
+  name,
+  photoUrl,
+  hero,
+}: {
+  name: string;
+  photoUrl?: string | null;
+  hero?: boolean;
+}) {
+  const cls = cx('avatar', hero && 'avatar--hero');
+  const size = hero ? 52 : 46;
+  return photoUrl ? (
+    <img className={cls} src={photoUrl} alt="" width={size} height={size} />
+  ) : (
+    <span className={cls} aria-hidden="true">
+      {initials(name)}
+    </span>
+  );
+}
+
+/** Иллюстрация-пятно для пустых, успешных и ошибочных состояний */
+export function Spot({
+  icon,
+  tone = 'brand',
+}: {
+  icon: ReactNode;
+  tone?: 'brand' | 'ok' | 'danger';
 }) {
   return (
-    <div className="stack">
-      {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-      <h1 className={cx('h1', large && 'h1--lg')}>{title}</h1>
-      {subtitle && <div className="muted">{subtitle}</div>}
+    <div className={cx('spot', tone !== 'brand' && `spot--${tone}`)} aria-hidden="true">
+      <span className="spot__blob" />
+      <span className="spot__dot spot__dot--a" />
+      <span className="spot__dot spot__dot--b" />
+      <span className="spot__dot spot__dot--c" />
+      <span className="spot__core">{icon}</span>
     </div>
+  );
+}
+
+/** Плитка быстрого действия в горизонтальной ленте */
+export function QuickTile({
+  to,
+  icon,
+  label,
+  tone,
+  primary,
+}: {
+  to: string;
+  icon: ReactNode;
+  label: string;
+  tone?: 'ok' | 'warn' | 'neutral';
+  primary?: boolean;
+}) {
+  return (
+    <Link to={to} className={cx('qt', primary && 'qt--primary')}>
+      <span className={cx('qt__icon', tone && `qt__icon--${tone}`)} aria-hidden="true">
+        {icon}
+      </span>
+      {label}
+    </Link>
+  );
+}
+
+/** Строка-переход: иконка, заголовок с подписью, значение справа и шеврон */
+export function RowLink({
+  to,
+  icon,
+  tone,
+  title,
+  sub,
+  value,
+}: {
+  to: string;
+  icon?: ReactNode;
+  tone?: 'ok' | 'warn' | 'danger' | 'neutral';
+  title: string;
+  sub?: ReactNode;
+  value?: ReactNode;
+}) {
+  return (
+    <Link to={to} className="row-link">
+      {icon && (
+        <span className={cx('icon-sq', tone && `icon-sq--${tone}`)} aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      <span className="row-link__text">
+        <span className="row-link__title">{title}</span>
+        {sub && <span className="row-link__sub">{sub}</span>}
+      </span>
+      {value && <span className="row-link__value">{value}</span>}
+      <IconChevron size={18} className="chev" aria-hidden="true" />
+    </Link>
   );
 }
 
@@ -249,7 +393,9 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <div className="field__error">{error}</div>
+        <div className="field__error" role="alert">
+          {error}
+        </div>
       ) : hint ? (
         <div className="hint">{hint}</div>
       ) : null}
@@ -295,9 +441,9 @@ export function Timeline({ steps }: { steps: TimelineStep[] }) {
   );
 }
 
-export function Loading({ text }: { text?: string }) {
+export function Loading({ text, compact }: { text?: string; compact?: boolean }) {
   return (
-    <div className="center" role="status">
+    <div className={cx('center', compact && 'center--compact')} role="status" aria-live="polite">
       <div className="spinner" />
       {text && <div className="muted">{text}</div>}
     </div>
@@ -317,6 +463,7 @@ export function ErrorView({
   const expired = error instanceof ApiError && error.status === 401;
   return (
     <div className="center" role="alert">
+      <Spot tone="danger" icon={<IconWarning size={34} />} />
       <div className="h2" style={{ color: 'var(--ink)' }}>
         {expired ? 'Откройте приложение заново' : 'Не получилось загрузить'}
       </div>
@@ -335,14 +482,17 @@ export function ErrorView({
 export function Empty({
   title,
   text,
+  icon,
   children,
 }: {
   title: string;
   text?: string;
+  icon?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div className="center">
+      <Spot icon={icon ?? <IconCheck size={34} />} />
       <div className="h2" style={{ color: 'var(--ink)' }}>
         {title}
       </div>
