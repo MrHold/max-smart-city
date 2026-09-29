@@ -5,7 +5,7 @@ import { useCategories, useCreateRequest, useMe, useUploadPhoto } from '../../ap
 import type { Category, LocationScope, MeasurementPlace, NewRequestInput } from '../../api/types';
 import { ensureWebApp } from '../../bridge';
 import { useBackButton } from '../../bridge/back';
-import { demoClock } from '../../clock';
+import { demoClock, useDemoOffset } from '../../clock';
 import { fmtDateTime, parseTemp, toLocalInputValue } from '../../lib/format';
 import { Button, Card, ErrorView, Field, Loading, StepProgress, Tile } from '../../ui';
 import {
@@ -78,6 +78,13 @@ export function NewRequest() {
   const [startedAt, setStartedAt] = useState(() =>
     toLocalInputValue(new Date(demoClock.now().getTime() - 3_600_000)),
   );
+  // Сдвиг демо-часов может прийти с сервера уже после открытия формы (вход сразу по ссылке):
+  // пока житель не менял время сам, подставляем «час назад» по демо-часам.
+  const offset = useDemoOffset();
+  const [startedTouched, setStartedTouched] = useState(false);
+  useEffect(() => {
+    if (!startedTouched) setStartedAt(toLocalInputValue(new Date(Date.now() + offset - 3_600_000)));
+  }, [offset, startedTouched]);
   const [temp, setTemp] = useState('');
   const [place, setPlace] = useState<MeasurementPlace>('room');
   const [planned, setPlanned] = useState<boolean | null>(null);
@@ -343,7 +350,10 @@ export function NewRequest() {
               type="datetime-local"
               value={startedAt}
               max={toLocalInputValue(demoClock.now())}
-              onChange={(e) => setStartedAt(e.target.value)}
+              onChange={(e) => {
+                setStartedTouched(true);
+                setStartedAt(e.target.value);
+              }}
             />
           </Field>
 
