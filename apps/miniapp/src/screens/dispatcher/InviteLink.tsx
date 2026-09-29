@@ -30,7 +30,11 @@ export function InviteLink({
         >
           {invite.isPending ? '…' : 'Пригласить в бот'}
         </button>
-        {invite.isError && <span className="field__error">{invite.error.message}</span>}
+        {invite.isError && (
+          <span className="field__error" role="alert">
+            {invite.error.message}
+          </span>
+        )}
       </span>
     );
   }

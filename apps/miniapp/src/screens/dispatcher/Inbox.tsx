@@ -16,10 +16,10 @@ import {
   ErrorView,
   formatRub,
   Loading,
+  PageHeader,
   Segmented,
   Stat,
 } from '../../ui';
-import { IconArrowLeft } from '../../ui/icons';
 import { ClusterPanel } from './ClusterPanel';
 import { Executors } from './Executors';
 
@@ -164,28 +164,23 @@ export function DispatcherInbox() {
 
   return (
     <main className="page page--no-tabbar cab">
-      <div className="stack-8">
-        <Link to="/" className="back-link">
-          <IconArrowLeft size={18} />
-          Мой дом
-        </Link>
-        <div className="row row--between wrap">
-          <div>
-            <div className="eyebrow">{inbox.data?.orgName ?? 'Управляющая организация'}</div>
-            <h1 className="h1">Кабинет диспетчера</h1>
-          </div>
-          <div style={{ minWidth: 240 }}>
-            <Segmented<'inbox' | 'executors'>
-              value={executorsTab ? 'executors' : 'inbox'}
-              onChange={(v) => navigate(v === 'inbox' ? '/dispatcher' : '/dispatcher/executors')}
-              options={[
-                { value: 'inbox', label: 'Входящие' },
-                { value: 'executors', label: 'Исполнители' },
-              ]}
-            />
-          </div>
+      <PageHeader
+        hero
+        backTo="/"
+        eyebrow={inbox.data?.orgName ?? 'Управляющая организация'}
+        title="Кабинет диспетчера"
+      >
+        <div style={{ maxWidth: 360 }}>
+          <Segmented<'inbox' | 'executors'>
+            value={executorsTab ? 'executors' : 'inbox'}
+            onChange={(v) => navigate(v === 'inbox' ? '/dispatcher' : '/dispatcher/executors')}
+            options={[
+              { value: 'inbox', label: 'Входящие' },
+              { value: 'executors', label: 'Исполнители' },
+            ]}
+          />
         </div>
-      </div>
+      </PageHeader>
 
       {executorsTab ? (
         <Executors houseId={me.data.house?.id} />
