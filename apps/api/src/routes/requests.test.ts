@@ -114,9 +114,9 @@ suite('заявки', () => {
 
     expect(detail.number).toMatch(/^2026-\d{4}$/);
     expect(detail.title).toBe('Холодные батареи');
-    // Срок аварийной категории — два часа от начала: 06:30 + 2 ч.
-    expect(detail.dueAt).toBe('2026-11-10T05:30:00.000Z');
-    expect(detail.overdue).toBe(true);
+    // Срок аварийной категории — два часа от подачи заявки (09:30), а не от начала проблемы.
+    expect(detail.dueAt).toBe('2026-11-10T11:30:00.000Z');
+    expect(detail.overdue).toBe(false);
     // Шесть часов по три градуса: 0,15 % за градусо-час от платы за месяц.
     expect(detail.liability?.hours).toBe(6);
     expect(detail.liability?.apartmentKopecks).toBe(6496);
@@ -178,6 +178,55 @@ suite('заявки', () => {
 
     const list = await call('GET', '/api/requests', AUTHOR);
     expect(list.json()).toHaveLength(1);
+  });
+
+  it('одновременная двойная подача создаёт одну заявку', async () => {
+    const [a, b] = await Promise.all([
+      call('POST', '/api/requests', AUTHOR, newRequest()),
+      call('POST', '/api/requests', AUTHOR, newRequest()),
+    ]);
+    expect(a.statusCode, a.body).toBe(200);
+    expect(b.statusCode, b.body).toBe(200);
+    expect(a.json().id).toBe(b.json().id);
+    expect((await call('GET', '/api/requests', AUTHOR)).json()).toHaveLength(1);
+  });
+
+  it('не принимает замер из будущего и замер раньше начала проблемы', async () => {
+    const future = await call(
+      'POST',
+      '/api/requests',
+      AUTHOR,
+      newRequest({
+        measurements: [
+          {
+            value: 15,
+            unit: 'celsius',
+            measuredAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
+            place: 'room',
+          },
+        ],
+      }),
+    );
+    expect(future.statusCode).toBe(400);
+    expect(future.json().error.message).toContain('будущем');
+
+    const beforeStart = await call(
+      'POST',
+      '/api/requests',
+      AUTHOR,
+      newRequest({
+        measurements: [
+          {
+            value: 15,
+            unit: 'celsius',
+            measuredAt: new Date(new Date(STARTED).getTime() - 3_600_000).toISOString(),
+            place: 'room',
+          },
+        ],
+      }),
+    );
+    expect(beforeStart.statusCode).toBe(400);
+    expect(beforeStart.json().error.message).toContain('раньше начала');
   });
 
   it('заявка другой категории дублем не считается', async () => {
@@ -293,6 +342,16 @@ suite('заявки', () => {
       expect(second.statusCode).toBe(409);
     });
 
+    it('двойное нажатие «У меня тоже» не даёт ошибку сервера', async () => {
+      const created = await createRequest();
+      const results = await Promise.all([join(NEIGHBOUR)(created.id), join(NEIGHBOUR)(created.id)]);
+      expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+      const detail = RequestDetailSchema.parse(
+        (await call('GET', `/api/requests/${created.id}`, AUTHOR)).json(),
+      );
+      expect(detail.joiners).toHaveLength(1);
+    });
+
     it('не даёт присоединиться к своей заявке', async () => {
       const created = await createRequest();
       const res = await join(AUTHOR, 'кв. 12')(created.id);
@@ -359,6 +418,20 @@ suite('заявки', () => {
       expect(detail.gji.available).toBe(false);
     });
 
+    it('двойное подтверждение закрывает заявку один раз', async () => {
+      const created = await createRequest();
+      await markDone(created.id);
+      const confirm = () =>
+        call('POST', `/api/requests/${created.id}/confirm`, AUTHOR, { accepted: true });
+      const results = await Promise.all([confirm(), confirm()]);
+      expect(results.map((r) => r.statusCode)).toEqual([200, 200]);
+
+      const events = await db.execute(
+        sql`select count(*)::int as n from request_events where request_id = ${created.id} and type = 'confirmed'`,
+      );
+      expect(events.rows[0]?.n).toBe(1);
+    });
+
     it('отказ возвращает заявку в работу и перезапускает срок', async () => {
       const created = await createRequest();
       await markDone(created.id);
@@ -413,25 +486,19 @@ suite('заявки', () => {
   });
 
   describe('шаг в ГЖИ', () => {
-    it('открывается только после истечения срока ответа', async () => {
-      const created = await createRequest();
-      expect(created.gji.available).toBe(true);
-      expect(created.gji.afterAt).toBe(created.dueAt);
-
-      // Свежая заявка: срок ещё не истёк. Категория другая, иначе сработает
-      // защита от дублей и вернётся первая заявка.
-      const fresh = await call('POST', '/api/requests', AUTHOR, {
+    it('давняя проблема не даёт жалобу сразу: срок ответа идёт от подачи', async () => {
+      // Проблема началась неделю назад, но УК узнала о ней только сейчас
+      const created = await call('POST', '/api/requests', AUTHOR, {
         ...newRequest({
-          category: 'hot_water',
-          startedAt: NOW.toISOString(),
-          measurements: [
-            { value: 48, unit: 'celsius', measuredAt: NOW.toISOString(), place: 'tap' },
-          ],
+          startedAt: new Date(NOW.getTime() - 7 * 24 * 3_600_000).toISOString(),
+          measurements: [{ value: 15, unit: 'celsius', measuredAt: STARTED, place: 'room' }],
         }),
       });
-      const detail = RequestDetailSchema.parse(fresh.json());
+      const detail = RequestDetailSchema.parse(created.json());
+      expect(detail.overdue).toBe(false);
       expect(detail.gji.available).toBe(false);
       expect(detail.gji.afterAt).toBe(detail.dueAt);
+      expect(detail.dueAt).toBe('2026-11-10T11:30:00.000Z');
     });
   });
 });

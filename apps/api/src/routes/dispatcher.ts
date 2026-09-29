@@ -40,6 +40,7 @@ import type { FastifyPluginAsync, preHandlerAsyncHookHandler } from 'fastify';
 import { getAuth } from '../auth/authenticate';
 import type { RegionsData } from '../data/regions';
 import { ApiError, badRequest, notFound } from '../errors';
+import { priorHoursFor } from './liability-of';
 
 const forbidden = (message: string) => new ApiError(403, 'forbidden', message);
 
@@ -84,6 +85,7 @@ function liabilityByRequest(
   housesById: Map<string, { tz: string; regionCode: string }>,
   data: RegionsData,
   now: Date,
+  priorHours: Map<string, number>,
 ): Map<string, { kopecks: number; perHourKopecks: number }> {
   const result = new Map<string, { kopecks: number; perHourKopecks: number }>();
 
@@ -109,6 +111,7 @@ function liabilityByRequest(
       plannedNotice: row.plannedNotice,
       accident: row.accident,
       affectedApartments: affected,
+      priorHoursThisMonth: priorHours.get(row.id) ?? 0,
       billing: {},
     };
 
@@ -220,7 +223,29 @@ export const dispatcherRoutes =
           ])
         : [[], []];
 
-      const money = liabilityByRequest(rows, measurementRows, joinRows, housesById, data, now);
+      // Месячный лимит перерывов общий на дом: сумма в кабинете должна совпадать с карточкой
+      const priorHours = new Map(
+        await Promise.all(
+          rows.map(async (r) => {
+            const house = housesById.get(r.houseId);
+            const category = data.regions
+              .find((reg) => reg.meta.code === house?.regionCode)
+              ?.categories.find((c) => c.code === r.category);
+            const hours = house && category ? await priorHoursFor(db, r, category, house.tz) : 0;
+            return [r.id, hours] as const;
+          }),
+        ),
+      );
+
+      const money = liabilityByRequest(
+        rows,
+        measurementRows,
+        joinRows,
+        housesById,
+        data,
+        now,
+        priorHours,
+      );
 
       const clusterable: ClusterableRequest[] = rows.map((r) => ({
         id: r.id,
@@ -444,10 +469,17 @@ export const dispatcherRoutes =
             continue;
           }
 
-          await tx
+          // Статус в условии: при двойном нажатии второй запрос ждёт первый, видит уже
+          // новый статус и ничего не меняет — без второго события и второго уведомления
+          const changed = await tx
             .update(requests)
             .set({ status: next, updatedAt: now, ...apply(row) })
-            .where(eq(requests.id, row.id));
+            .where(and(eq(requests.id, row.id), eq(requests.status, row.status)))
+            .returning({ id: requests.id });
+          if (changed.length === 0) {
+            skipped.push({ requestId: row.id, reason: 'Заявку уже изменили' });
+            continue;
+          }
 
           await tx.insert(requestEvents).values({
             requestId: row.id,

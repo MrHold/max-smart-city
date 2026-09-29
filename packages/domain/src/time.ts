@@ -91,6 +91,15 @@ export function nextLocalMidnight(at: Date, tz: string): Date {
   return corrected.getTime() > at.getTime() ? corrected : new Date(at.getTime() + DAY_MS);
 }
 
+/** Начало местного календарного месяца, в который попадает момент. */
+export function localMonthStart(at: Date, tz: string): Date {
+  const offset = offsetMs(at, tz);
+  const local = new Date(at.getTime() + offset);
+  const start = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1);
+  const guess = new Date(start - offset);
+  return new Date(start - offsetMs(guess, tz));
+}
+
 export const toMinutes = (hhmm: string): number => {
   const [h = '0', m = '0'] = hhmm.split(':');
   return Number(h) * 60 + Number(m);
