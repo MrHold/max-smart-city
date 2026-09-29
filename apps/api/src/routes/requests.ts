@@ -19,6 +19,7 @@ import {
   photos,
   requestEvents,
   requests,
+  sql,
 } from '@msc/db';
 import {
   allowedScopes,
@@ -44,13 +45,25 @@ import { getAuth } from '../auth/authenticate';
 import type { RegionsData } from '../data/regions';
 import { ApiError, badRequest, notFound } from '../errors';
 import { signedDocumentPath } from './doc-link';
-import { liabilityFor } from './liability-of';
+import { liabilityFor, priorHoursFor } from './liability-of';
 
 const forbidden = (message: string) => new ApiError(403, 'forbidden', message);
 const conflict = (message: string) => new ApiError(409, 'conflict', message);
 
 /** Окно, в котором повторная заявка той же категории считается случайным дублем. */
 const DUPLICATE_WINDOW_MS = Number(process.env.DUPLICATE_WINDOW_MIN ?? 10) * 60_000;
+// Часы телефона и сервера расходятся на минуты: замер «из будущего» в этих пределах — не ошибка
+const CLOCK_SKEW_MS = 5 * 60_000;
+
+/** Замер подтверждает проблему, поэтому он не раньше её начала и не позже текущего момента. */
+function checkMeasurements(list: Measurement[], startedAt: Date, now: Date): void {
+  for (const m of list) {
+    const at = new Date(m.measuredAt).getTime();
+    if (at > now.getTime() + CLOCK_SKEW_MS)
+      throw badRequest('Время замера не может быть в будущем');
+    if (at < startedAt.getTime()) throw badRequest('Замер не может быть раньше начала проблемы');
+  }
+}
 
 const eventLabels: Record<string, string> = {
   created: 'Заявка отправлена',
@@ -213,6 +226,7 @@ async function buildDetail(
   // подтверждают масштаб и нужны для акта, но чужой градусник не увеличивает
   // перерасчёт по чужой квартире.
   const measurements = measurementRows.filter((m) => m.joinerUserId === null).map(toMeasurement);
+  const priorHoursThisMonth = await priorHoursFor(db, row, category, house.tz);
 
   const liability = liabilityFor(
     {
@@ -227,6 +241,7 @@ async function buildDetail(
       accident: row.accident,
       measurements,
       affectedApartments: 1 + joinRows.length,
+      priorHoursThisMonth,
       billing: {
         monthlyChargeKopecks: authorBilling?.monthlyChargeKopecks ?? null,
         apartmentAreaM2: authorBilling?.areaM2 ?? null,
@@ -302,7 +317,9 @@ async function buildDetail(
       // Мини-приложение открывает её обычным переходом, поэтому браузер не отправляет
       // заголовок с данными входа, и подпись остаётся единственной проверкой при скачивании.
       url:
-        steps.claim.available && isAuthor ? signedDocumentPath(row.id, 'claim', now, secret) : null,
+        steps.claim.available && isAuthor
+          ? signedDocumentPath(row.id, 'claim', new Date(), secret)
+          : null,
     },
     gji: steps.gji,
   };
@@ -432,40 +449,48 @@ export const requestsRoutes =
         throw badRequest('Укажите температуру в квартире — от неё зависит допустимое время');
       }
 
+      checkMeasurements(input.measurements, startedAt, now);
+
       const deadlineRule = data.rules.deadlines.find((d) => d.id === category.slaRule);
       if (!deadlineRule) throw new ApiError(500, 'internal', `Нет срока ${category.slaRule}`);
-      const due = computeDueAt(startedAt, deadlineRule, {
+      // Срок ответа УК идёт от подачи заявки, а не от начала проблемы: иначе «началось
+      // неделю назад» давало бы заявку, просроченную в момент отправки, и сразу жалобу в ГЖИ.
+      // Начало проблемы нужно для денег — перерасчёт считается от него.
+      const due = computeDueAt(now, deadlineRule, {
         calendar: data.rules.calendar,
         tz: house.tz,
       });
 
-      // Двойное нажатие «Отправить» и повтор после обрыва связи не должны плодить
-      // одинаковые заявки: для диспетчера это дубли в кластере, для жителя — путаница.
-      // Повтором считаем ту же категорию того же автора, поданную не раньше окна
-      // и не позже текущего момента: без верхней границы после перемотки демо-часов
-      // назад старая заявка молча становилась бы «новой» и возвращалась вместо создания.
-      // Закрытые и отклонённые заявки повторами не считаются — по ним нечего возвращать.
-      const [duplicate] = await db
-        .select({ id: requests.id })
-        .from(requests)
-        .where(
-          and(
-            eq(requests.authorUserId, userId),
-            eq(requests.category, category.code),
-            gte(requests.createdAt, new Date(now.getTime() - DUPLICATE_WINDOW_MS)),
-            lte(requests.createdAt, now),
-            notInArray(requests.status, ['rejected', 'confirmed']),
-          ),
-        )
-        .limit(1);
+      const id = await db.transaction(async (tx) => {
+        // Два одновременных «Отправить» идут по очереди: без блокировки оба не видят
+        // друг друга в проверке ниже и создают две одинаковые заявки.
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`new-request:${userId}:${category.code}`}))`,
+        );
 
-      if (duplicate) {
+        // Двойное нажатие «Отправить» и повтор после обрыва связи не должны плодить
+        // одинаковые заявки: для диспетчера это дубли в кластере, для жителя — путаница.
+        // Повтором считаем ту же категорию того же автора, поданную не раньше окна
+        // и не позже текущего момента: без верхней границы после перемотки демо-часов
+        // назад старая заявка молча становилась бы «новой» и возвращалась вместо создания.
+        // Закрытые и отклонённые заявки повторами не считаются — по ним нечего возвращать.
+        const [duplicate] = await tx
+          .select({ id: requests.id })
+          .from(requests)
+          .where(
+            and(
+              eq(requests.authorUserId, userId),
+              eq(requests.category, category.code),
+              gte(requests.createdAt, new Date(now.getTime() - DUPLICATE_WINDOW_MS)),
+              lte(requests.createdAt, now),
+              notInArray(requests.status, ['rejected', 'confirmed']),
+            ),
+          )
+          .limit(1);
         // Возвращаем уже созданную заявку, а не ошибку: для пользователя повтор
         // должен выглядеть как успех, иначе он нажмёт ещё раз.
-        return buildDetail(db, data, await loadRequest(duplicate.id), userId, now, secret);
-      }
+        if (duplicate) return duplicate.id;
 
-      const id = await db.transaction(async (tx) => {
         const number = await nextRequestNumber(tx, now.getUTCFullYear());
         const [created] = await tx
           .insert(requests)
@@ -555,6 +580,8 @@ export const requestsRoutes =
       if (!me) throw badRequest('Сначала выберите свой дом');
       if (me.houseId !== row.houseId) throw forbidden('Заявка другого дома');
 
+      checkMeasurements(parsed.data.measurements, row.startedAt, now);
+
       const [existing] = await db
         .select({ userId: joins.userId })
         .from(joins)
@@ -563,12 +590,19 @@ export const requestsRoutes =
       if (existing) throw conflict('Вы уже присоединились');
 
       await db.transaction(async (tx) => {
-        await tx.insert(joins).values({
-          requestId: id,
-          userId,
-          apartmentLabel: parsed.data.apartmentLabel,
-          joinedAt: now,
-        });
+        // Двойное нажатие: проверка выше пропускает оба запроса, и второй упирался
+        // в первичный ключ с ошибкой 500. Теперь он ничего не вставляет и получает 409.
+        const inserted = await tx
+          .insert(joins)
+          .values({
+            requestId: id,
+            userId,
+            apartmentLabel: parsed.data.apartmentLabel,
+            joinedAt: now,
+          })
+          .onConflictDoNothing()
+          .returning({ userId: joins.userId });
+        if (inserted.length === 0) throw conflict('Вы уже присоединились');
 
         if (parsed.data.measurements.length) {
           await tx.insert(measurementsTable).values(
@@ -617,6 +651,10 @@ export const requestsRoutes =
 
       const status = row.status as RequestStatus;
       const accepted = parsed.data.accepted;
+      // Повторное нажатие той же кнопки: заявка уже там, куда ведёт действие — это успех
+      if ((accepted && status === 'confirmed') || (!accepted && status === 'reopened')) {
+        return buildDetail(db, data, row, userId, now, secret);
+      }
       // Недопустимый переход — это состояние заявки, а не сбой сервера:
       // отвечаем 409 с объяснением, а не 500.
       let next: RequestStatus;
@@ -652,7 +690,7 @@ export const requestsRoutes =
       if (!deadlineRule) throw new ApiError(500, 'internal', `Нет срока ${category.slaRule}`);
 
       await db.transaction(async (tx) => {
-        await tx
+        const updated = await tx
           .update(requests)
           .set({
             status: next,
@@ -664,7 +702,11 @@ export const requestsRoutes =
               ? row.dueAt
               : computeDueAt(now, deadlineRule, { calendar: data.rules.calendar, tz: house.tz }),
           })
-          .where(eq(requests.id, id));
+          // Статус в условии: второе одновременное нажатие ничего не перезапишет
+          // и не добавит второе событие в историю
+          .where(and(eq(requests.id, id), eq(requests.status, status)))
+          .returning({ id: requests.id });
+        if (updated.length === 0) return;
 
         await tx.insert(requestEvents).values({
           requestId: id,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Measurement } from './contracts';
-import { calcLiability, type LiabilityInput } from './liability';
+import { calcLiability, type LiabilityInput, priorInterruptionHours } from './liability';
 import { checkQuality } from './quality';
 import type { InterruptionRule, QualityRule, RegionPackage } from './regions';
 
@@ -303,7 +303,7 @@ describe('перерыв подачи', () => {
     expect(result.hours).toBe(2);
   });
 
-  it('плановое отключение нарушением не является', () => {
+  it('плановое отключение в пределах срока нарушением не является', () => {
     const result = calcLiability(
       base({
         service: 'hot_water',
@@ -316,7 +316,24 @@ describe('перерыв подачи', () => {
       new Date('2026-06-20T04:00:00Z'),
     );
     expect(result.apartmentKopecks).toBe(0);
-    expect(result.steps[0]?.label).toContain('Плановое отключение');
+    expect(result.steps.some((s) => s.label.includes('плановое отключение'))).toBe(true);
+  });
+
+  it('плановое отключение сверх 14 суток снижает плату за лишние часы', () => {
+    const result = calcLiability(
+      base({
+        service: 'hot_water',
+        startedAt: new Date('2026-06-01T04:00:00Z'),
+        billing: { monthlyChargeKopecks: 50_000 },
+        plannedNotice: true,
+      }),
+      { interruption: { rule: hotWaterInterruption, measurements: [] } },
+      region,
+      // 14 суток и ещё 10 часов
+      new Date('2026-06-15T14:00:00Z'),
+    );
+    expect(result.hours).toBe(10);
+    expect(result.apartmentKopecks).toBeGreaterThan(0);
   });
 
   it('для перерыва отопления допустимое время зависит от замера', () => {
@@ -405,5 +422,50 @@ describe('воспроизводимость', () => {
     expect(Number.isInteger(result.apartmentKopecks)).toBe(true);
     expect(Number.isInteger(result.houseKopecks)).toBe(true);
     expect(Number.isInteger(result.perHourHouseKopecks)).toBe(true);
+  });
+});
+
+describe('перерывы за месяц до заявки', () => {
+  const current = { startedAt: new Date('2026-11-20T10:00:00Z') };
+  const span = (from: string, to: string | null) => ({
+    startedAt: new Date(from),
+    endedAt: to ? new Date(to) : null,
+  });
+
+  it('складывает прошлые перерывы этого месяца', () => {
+    const hours = priorInterruptionHours(
+      current,
+      [
+        span('2026-11-05T08:00:00Z', '2026-11-05T11:00:00Z'),
+        span('2026-11-10T08:00:00Z', '2026-11-10T10:00:00Z'),
+      ],
+      tz,
+    );
+    expect(hours).toBe(5);
+  });
+
+  it('перекрывающиеся заявки соседей не считаются дважды', () => {
+    const hours = priorInterruptionHours(
+      current,
+      [
+        span('2026-11-05T08:00:00Z', '2026-11-05T11:00:00Z'),
+        span('2026-11-05T09:00:00Z', '2026-11-05T12:00:00Z'),
+      ],
+      tz,
+    );
+    expect(hours).toBe(4);
+  });
+
+  it('прошлый месяц и время после начала заявки не считаются', () => {
+    const hours = priorInterruptionHours(
+      current,
+      [
+        span('2026-10-20T08:00:00Z', '2026-10-20T12:00:00Z'),
+        // Ещё не закончился: считается только до начала текущей заявки
+        span('2026-11-20T08:00:00Z', null),
+      ],
+      tz,
+    );
+    expect(hours).toBe(2);
   });
 });

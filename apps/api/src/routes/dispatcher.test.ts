@@ -164,10 +164,28 @@ suite('кабинет диспетчера', () => {
     const card = data.clusters[0];
     expect(card?.title).toBe('Холодные батареи');
     expect(card?.apartments).toBe(2);
-    expect(card?.overdue).toBe(true);
+    // Срок ответа идёт от подачи заявки: только что поданная ещё не просрочена
+    expect(card?.overdue).toBe(false);
     expect(card?.kopecks).toBeGreaterThan(0);
     expect(card?.perHourKopecks).toBeGreaterThan(0);
     expect(data.totalKopecks).toBe(card?.kopecks);
+  });
+
+  it('двойное «Принять» меняет заявку и уведомляет жителя один раз', async () => {
+    const created = await createRequest(RESIDENT);
+    const accept = () =>
+      call('POST', '/api/dispatcher/accept', DISPATCHER, { requestIds: [created.id] });
+    const results = await Promise.all([accept(), accept()]);
+    const updated = results.map((r) => r.json().updated as number);
+    expect(updated.sort()).toEqual([0, 1]);
+
+    const events = await db.execute(
+      sql`select count(*)::int as n from request_events where request_id = ${created.id} and type = 'accepted'`,
+    );
+    expect(events.rows[0]?.n).toBe(1);
+    const sent = await db.execute(sql`select payload from outbox`);
+    const accepted = sent.rows.filter((r) => (r.payload as { type: string }).type === 'accepted');
+    expect(accepted).toHaveLength(1);
   });
 
   it('новая заявка приходит во входящие непринятой, в том числе в демо-режиме', async () => {

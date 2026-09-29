@@ -17,7 +17,7 @@ import { getAuth } from '../auth/authenticate';
 import type { RegionsData } from '../data/regions';
 import { ApiError, notFound } from '../errors';
 import { checkSignedLink, type DocumentKind, linkTtlMs, signedDocumentPath } from './doc-link';
-import { liabilityFor } from './liability-of';
+import { liabilityFor, priorHoursFor } from './liability-of';
 
 const forbidden = (message: string) => new ApiError(403, 'forbidden', message);
 const conflict = (message: string) => new ApiError(409, 'conflict', message);
@@ -113,6 +113,7 @@ export const documentsRoutes =
           accident: row.accident,
           measurements: own,
           affectedApartments: 1 + joinRows.length,
+          priorHoursThisMonth: await priorHoursFor(db, row, category, house.tz),
           billing: {
             monthlyChargeKopecks: membership?.monthlyChargeKopecks ?? null,
             apartmentAreaM2: membership?.areaM2 ?? null,
@@ -155,7 +156,8 @@ export const documentsRoutes =
       const query = req.query as { exp?: string; sig?: string };
 
       if (query.sig) {
-        const check = checkSignedLink(id, kind, query, clock.now(), secret);
+        // Срок ссылки — по настоящему времени: демо-часы двигают сроки заявки, а не жизнь ссылки
+        const check = checkSignedLink(id, kind, query, new Date(), secret);
         if (!check.ok) {
           throw forbidden(
             check.reason === 'expired'
@@ -298,9 +300,10 @@ export const documentsRoutes =
           }
         }
 
+        const issuedAt = new Date();
         return {
-          url: signedDocumentPath(id, kind, now, secret),
-          expiresAt: new Date(now.getTime() + linkTtlMs).toISOString(),
+          url: signedDocumentPath(id, kind, issuedAt, secret),
+          expiresAt: new Date(issuedAt.getTime() + linkTtlMs).toISOString(),
         };
       },
     );

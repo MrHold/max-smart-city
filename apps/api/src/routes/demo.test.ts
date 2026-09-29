@@ -1,13 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { createDb, eq, parseEncKey, requests, runMigrations, sql } from '@msc/db';
 import { DemoClockStateSchema, RequestDetailSchema } from '@msc/domain';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import type { AuthConfig } from '../auth/config';
 import { signInitData } from '../auth/init-data';
 import { createDemoClock } from '../clock/demo';
 import { loadRegionsData, regionsDataSource } from '../data/regions';
 import { seedFromRegions } from '../data/seed';
+import { linkTtlMs } from './doc-link';
 
 const url = process.env.TEST_DATABASE_URL;
 const suite = url ? describe : describe.skip;
@@ -251,9 +252,17 @@ suite('демо-часы', () => {
     const spoiled = url.replace(/sig=[^&]+/, 'sig=подделка');
     expect((await app.inject({ method: 'GET', url: spoiled })).statusCode).toBe(403);
 
-    // Перематываем время за срок жизни ссылки.
+    // Демо-часы двигают сроки заявки, но не жизнь ссылки: она идёт по настоящему времени
     await call('POST', '/api/demo/clock', { shiftHours: 24 });
-    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(200);
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(Date.now() + linkTtlMs + 60_000);
+      expect((await app.inject({ method: 'GET', url })).statusCode).toBe(403);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('ссылку на жалобу не выдают раньше срока', async () => {

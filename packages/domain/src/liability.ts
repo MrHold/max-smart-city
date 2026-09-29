@@ -2,7 +2,7 @@ import type { Liability, LiabilityStep, Measurement, NormRef, Service } from './
 import type { QualityVerdict } from './quality';
 import type { InterruptionRule, QualityRule, RegionPackage } from './regions';
 import { findNormative, findTariff } from './regions';
-import { HOUR_MS } from './time';
+import { HOUR_MS, localMonthStart } from './time';
 
 /**
  * Допущения на время MVP: площадь квартиры и число жильцов у нас не спрашивают,
@@ -204,6 +204,42 @@ function allowedSingleHours(
   return rule.limits.singleHours ?? rule.limits.monthlyHours;
 }
 
+/**
+ * Сколько часов перерывов этой же услуги в доме уже было в текущем месяце до начала заявки.
+ * Месячный лимит общий на все перерывы, а не на каждую заявку. Перерывы разных жителей
+ * одного дома перекрываются — считаем объединение интервалов, чтобы не посчитать час дважды.
+ */
+export function priorInterruptionHours(
+  current: { startedAt: Date },
+  others: Array<{ startedAt: Date; endedAt: Date | null }>,
+  tz: string,
+): number {
+  const from = localMonthStart(current.startedAt, tz).getTime();
+  const until = current.startedAt.getTime();
+  const spans = others
+    .map((o) => [
+      Math.max(o.startedAt.getTime(), from),
+      Math.min(o.endedAt?.getTime() ?? until, until),
+    ])
+    .filter(([a = 0, b = 0]) => b > a)
+    .sort((x, y) => (x[0] ?? 0) - (y[0] ?? 0));
+
+  let total = 0;
+  let openFrom = Number.NEGATIVE_INFINITY;
+  let openTo = Number.NEGATIVE_INFINITY;
+  for (const [a = 0, b = 0] of spans) {
+    if (a > openTo) {
+      if (openTo > openFrom) total += openTo - openFrom;
+      openFrom = a;
+      openTo = b;
+    } else {
+      openTo = Math.max(openTo, b);
+    }
+  }
+  if (openTo > openFrom) total += openTo - openFrom;
+  return round2(total / HOUR_MS);
+}
+
 function interruptionReduction(
   rule: InterruptionRule,
   input: LiabilityInput,
@@ -213,12 +249,21 @@ function interruptionReduction(
   const until = input.endedAt ?? now;
   const totalHours = round2(Math.max(0, (until.getTime() - input.startedAt.getTime()) / HOUR_MS));
 
-  const single = allowedSingleHours(rule, input, measurements);
-  const monthlyLeft = Math.max(0, rule.limits.monthlyHours - (input.priorHoursThisMonth ?? 0));
-  // Авария на тупиковой магистрали — отдельное исключение с более длинным перерывом.
-  // Месячный лимит короче него, и если ограничивать им, исключение никогда не сработает.
-  const accidentException = Boolean(input.accident && rule.limits.accidentSingleHours);
-  const allowance = accidentException ? single : Math.min(single, monthlyLeft);
+  // Объявленное плановое отключение — не нарушение, но только в пределах своего срока:
+  // сверх него плата снижается так же, как за обычный перерыв.
+  const plannedDays = input.plannedNotice ? rule.planned?.allowedDays : undefined;
+  const prior = input.priorHoursThisMonth ?? 0;
+  let allowance: number;
+  if (plannedDays !== undefined) {
+    allowance = plannedDays * 24;
+  } else {
+    const single = allowedSingleHours(rule, input, measurements);
+    const monthlyLeft = Math.max(0, rule.limits.monthlyHours - prior);
+    // Авария на тупиковой магистрали — отдельное исключение с более длинным перерывом.
+    // Месячный лимит короче него, и если ограничивать им, исключение никогда не сработает.
+    const accidentException = Boolean(input.accident && rule.limits.accidentSingleHours);
+    allowance = accidentException ? single : Math.min(single, monthlyLeft);
+  }
   const over = round2(Math.max(0, totalHours - allowance));
 
   return {
@@ -235,8 +280,21 @@ function interruptionReduction(
         unit: 'ч',
         provenance: 'fact',
       },
+      ...(plannedDays === undefined && prior > 0
+        ? [
+            {
+              label: 'Перерывов в этом месяце до заявки',
+              value: prior,
+              unit: 'ч',
+              provenance: 'fact' as const,
+            },
+          ]
+        : []),
       {
-        label: 'Допустимый перерыв',
+        label:
+          plannedDays !== undefined
+            ? `Допустимое плановое отключение, ${plannedDays} дней`
+            : 'Допустимый перерыв',
         value: allowance,
         unit: 'ч',
         provenance: 'fact',
@@ -282,18 +340,6 @@ export function calcLiability(
     computedAt: now.toISOString(),
     rulesVersion: region.meta.rulesVersion,
   });
-
-  if (rules.interruption && input.plannedNotice && rules.interruption.rule.planned) {
-    return empty([
-      {
-        label: 'Плановое отключение в пределах установленного срока',
-        value: rules.interruption.rule.planned.allowedDays,
-        unit: 'дней',
-        provenance: 'fact',
-        ...withRef(refOf(rules.interruption.rule.source)),
-      },
-    ]);
-  }
 
   const reduction = rules.quality
     ? qualityReduction(rules.quality.verdict, rules.quality.rule)
