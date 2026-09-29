@@ -585,6 +585,17 @@ a.card:active {
 .btn--danger-text {
   color: var(--danger-ink);
 }
+/* Кнопка в синей шапке рядом с заголовком: полупрозрачная, как «Назад» и переключатель */
+.btn--on-hero {
+  height: 36px;
+  padding: 0 14px 0 10px;
+  gap: 6px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  box-shadow: none;
+  font-size: 15px;
+}
 .btn--stretched {
   width: 100%;
 }
@@ -1625,6 +1636,9 @@ a.card:focus-visible,
   }
   .btn--secondary:hover {
     background: var(--brand-100);
+  }
+  .btn--on-hero:hover {
+    background: rgba(255, 255, 255, 0.26);
   }
   a.card:hover {
     box-shadow:

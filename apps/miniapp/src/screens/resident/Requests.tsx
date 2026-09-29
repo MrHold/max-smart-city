@@ -24,8 +24,8 @@ export function Requests() {
         title="Заявки"
         subtitle="Ваши заявки и те, к которым вы присоединились"
         actions={
-          <ButtonLink to="/requests/new" size="sm" className="btn--light">
-            <IconPlus size={18} />
+          <ButtonLink to="/requests/new" variant="secondary" className="btn--on-hero">
+            <IconPlus size={16} />
             Новая
           </ButtonLink>
         }
