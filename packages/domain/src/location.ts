@@ -8,9 +8,12 @@ const ALL: LocationScope[] = ['apartment', 'entrance', 'floor', 'yard'];
  * путают диспетчера и исполнителя, поэтому их не принимает ни форма, ни API.
  */
 export function allowedScopes(category: {
+  code?: string;
   kind: RequestKind;
   zone?: 'yard' | 'entrance' | 'apartment';
 }): LocationScope[] {
+  // Лифт застревает между конкретными этажами: подъезд без этажа исполнителю ничего не говорит
+  if (category.code === 'elevator') return ['floor'];
   if (category.zone === 'yard') return ['yard'];
   if (category.zone === 'entrance') return ['entrance', 'floor'];
   if (category.zone === 'apartment') return ['apartment'];
